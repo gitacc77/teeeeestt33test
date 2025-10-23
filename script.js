@@ -4,7 +4,7 @@
  * Smart cryptocurrency analysis with AI power.
  *
  * @author    https://github.com/imotb
- * @version   1.5.0
+ * @version   1.0.0
  * @license   MIT
  */
 class CryptoAnalyzer {
@@ -126,53 +126,110 @@ class CryptoAnalyzer {
 
     // تابع جدید برای فرمت‌بندی اعداد بسیار کوچک
     formatSmallNumber(num, maxDecimals = 10) {
-        if (num === 0) return '0';
-        if (num >= 0.01) {
-            return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        // بررسی وجود num و معتبر بودن آن
+        if (num === undefined || num === null || isNaN(num)) {
+            console.warn('Invalid number detected:', num);
+            return '0';
         }
-        if (num >= 0.0001) {
-            return num.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 8 });
+        
+        const number = Number(num);
+        if (isNaN(number)) {
+            return '0';
+        }
+        
+        if (number === 0) return '0';
+        if (number >= 0.01) {
+            try {
+                return number.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 6 
+                });
+            } catch (error) {
+                return number.toFixed(2);
+            }
+        }
+        if (number >= 0.0001) {
+            try {
+                return number.toLocaleString(undefined, { 
+                    minimumFractionDigits: 4, 
+                    maximumFractionDigits: 8 
+                });
+            } catch (error) {
+                return number.toFixed(4);
+            }
         }
         
         // برای اعداد بسیار کوچک مثل شیبا و پپه
-        const fixedNum = num.toFixed(maxDecimals);
+        const fixedNum = number.toFixed(maxDecimals);
         // حذف صفرهای انتهایی
         return fixedNum.replace(/\.?0+$/, '');
     }
 
     // تابع جدید برای فرمت‌بندی قیمت بر اساس نوع ارز
     formatPrice(price, symbol) {
+        // بررسی وجود price و معتبر بودن آن
+        if (price === undefined || price === null || isNaN(price)) {
+            console.warn('Invalid price detected:', price);
+            return '0.00';
+        }
+        
+        // اطمینان از عدد بودن
+        const numPrice = Number(price);
+        if (isNaN(numPrice)) {
+            return '0.00';
+        }
+        
         // لیست ارزهایی که قیمت بسیار پایینی دارند
-        const lowPriceCryptos = ['SHIB', 'PEPE', 'DOGE', 'XLM'];
+        const lowPriceCryptos = ['SHIB', 'PEPE', 'DOGE', 'XLM', 'FLOKI', 'BABYDOGE'];
         
         if (lowPriceCryptos.includes(symbol)) {
-            if (price < 0.0001) {
-                return price.toFixed(8);
-            } else if (price < 0.01) {
-                return price.toFixed(6);
+            if (numPrice < 0.0001) {
+                return numPrice.toFixed(8);
+            } else if (numPrice < 0.01) {
+                return numPrice.toFixed(6);
             }
         }
         
-        if (price < 1) {
-            return price.toFixed(4);
+        if (numPrice < 1) {
+            return numPrice.toFixed(4);
         }
         
-        return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        // استفاده از toLocaleString با حفاظت از خطا
+        try {
+            return numPrice.toLocaleString(undefined, { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 6 
+            });
+        } catch (error) {
+            console.error('Error in toLocaleString:', error);
+            return numPrice.toFixed(2);
+        }
     }
 
     // تابع جدید برای فرمت‌بندی اعداد در محاسبات
     formatCalculationNumber(num) {
-        if (num === 0) return 0;
-        if (Math.abs(num) < 0.000001) {
-            return parseFloat(num.toFixed(10));
+        // بررسی وجود num و معتبر بودن آن
+        if (num === undefined || num === null || isNaN(num)) {
+            console.warn('Invalid calculation number detected:', num);
+            return 0;
         }
-        if (Math.abs(num) < 0.001) {
-            return parseFloat(num.toFixed(8));
+        
+        const number = Number(num);
+        if (isNaN(number)) {
+            return 0;
         }
-        if (Math.abs(num) < 0.1) {
-            return parseFloat(num.toFixed(6));
+        
+        if (number === 0) return 0;
+        if (Math.abs(number) < 0.000001) {
+            return parseFloat(number.toFixed(10));
         }
-        return parseFloat(num.toFixed(4));
+        if (Math.abs(number) < 0.001) {
+            return parseFloat(number.toFixed(8));
+        }
+        if (Math.abs(number) < 0.1) {
+            return parseFloat(number.toFixed(6));
+        }
+        return parseFloat(number.toFixed(4));
     }
 
     initializeEventListeners() {
@@ -466,6 +523,14 @@ class CryptoAnalyzer {
                 'درخواست بسیار طول کشید. لطفاً مجدداً تلاش کنید.' : 
                 'Request took too long. Please try again.';
         }
+        else if (error.message.includes('undefined') || error.message.includes('toLocaleString')) {
+            errorMessage = this.currentLanguage === 'fa' ? 
+                'خطا در پردازش داده‌ها' : 
+                'Data processing error';
+            errorDetails = this.currentLanguage === 'fa' ? 
+                'داده‌های دریافت شده ناقص هستند. لطفاً مجدداً تلاش کنید.' : 
+                'Received data is incomplete. Please try again.';
+        }
         else {
             errorMessage = this.currentLanguage === 'fa' ? 
                 'خطا در انجام تحلیل' : 
@@ -628,6 +693,18 @@ class CryptoAnalyzer {
             mantle: { symbol: 'MNT', name: this.currentLanguage === 'fa' ? 'منتل' : 'Mantle', coingeckoId: 'mantle', coinpaprikaId: 'mnt-mantle', tradingViewSymbol: 'BYBIT:MNTUSDT' },
             kaspa: { symbol: 'KAS', name: this.currentLanguage === 'fa' ? 'کسپا' : 'Kaspa', coingeckoId: 'kaspa', coinpaprikaId: 'kas-kaspa', tradingViewSymbol: 'MEXC:KASUSDT' },
             'flare-networks': { symbol: 'FLR', name: this.currentLanguage === 'fa' ? 'فلر' : 'Flare', coingeckoId: 'flare-networks', coinpaprikaId: 'flr-flare-network', tradingViewSymbol: 'OKX:FLRUSDT' },
+            'alphabet-xstock': { symbol: 'GOOGLX', name: this.currentLanguage === 'fa' ? 'گوگل استاک' : 'Alphabet xStock', coingeckoId: 'alphabet-xstock', coinpaprikaId: 'googlx-alphabet-tokenized-stock-xstock', tradingViewSymbol: 'BYBIT:GOOGLXUSDT' },
+            'nvidia-xstock': { symbol: 'NVDAX', name: this.currentLanguage === 'fa' ? 'انویدیا استاک' : 'NVIDIA xStock', coingeckoId: 'nvidia-xstock', coinpaprikaId: 'nvdax-nvidia-tokenized-stock-xstock', tradingViewSymbol: 'CRYPTO:NVDAXUSD' },
+            'apple-xstock': { symbol: 'AAPLX', name: this.currentLanguage === 'fa' ? 'اپل استاک' : 'Apple xStock', coingeckoId: 'apple-xstock', coinpaprikaId: 'aaplx-apple-tokenized-stock-xstock', tradingViewSymbol: 'MEXC:AAPLXUSDT' },
+            'tesla-xstock': { symbol: 'TSLAX', name: this.currentLanguage === 'fa' ? 'تسلا استاک' : 'Tesla xStock', coingeckoId: 'tesla-xstock', coinpaprikaId: 'tslax-tesla-tokenized-stock-xstock', tradingViewSymbol: 'MEXC:TSLAXUSDT' },
+            'circle-xstock': { symbol: 'CRCLX', name: this.currentLanguage === 'fa' ? 'سیرکل استاک' : 'Circle xStock', coingeckoId: 'circle-xstock', coinpaprikaId: 'crclx-circle-tokenized-stock-xstock', tradingViewSymbol: 'BYBIT:CRCLXUSDT' },
+            'microstrategy-xstock': { symbol: 'MSTRX', name: this.currentLanguage === 'fa' ? 'میکرواستراتژی استاک' : 'MicroStrategy xStock', coingeckoId: 'microstrategy-xstock', coinpaprikaId: 'mstrx-microstrategy-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:MSTRXUSDT' },
+            'sp500-xstock': { symbol: 'SPYX', name: this.currentLanguage === 'fa' ? 'اس پی 500 استاک' : 'SP500 xStock', coingeckoId: 'sp500-xstock', coinpaprikaId: 'spyx-sp500-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:SPYXUSDT' },
+            'meta-xstock': { symbol: 'METAX', name: this.currentLanguage === 'fa' ? 'متا استاک' : 'Meta xStock', coingeckoId: 'meta-xstock', coinpaprikaId: 'metax-meta-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:METAXUSDT' },
+            'cisco-xstock': { symbol: 'CSCOX', name: this.currentLanguage === 'fa' ? 'سیسکو استاک' : 'Cisco xStock', coingeckoId: 'cisco-xstock', coinpaprikaId: 'cscox-cisco-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:CSCOXUSDT' },
+            'broadcom-xstock': { symbol: 'AVGOX', name: this.currentLanguage === 'fa' ? 'برادکام استاک' : 'Broadcom xStock', coingeckoId: 'broadcom-xstock', coinpaprikaId: 'avgox-broadcom-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:AVGOXUSDT' },
+            'crowdstrike-xstock': { symbol: 'CRWDX', name: this.currentLanguage === 'fa' ? 'کراوداسترایک استاک' : 'CrowdStrike xStock', coingeckoId: 'crowdstrike-xstock', coinpaprikaId: 'crwdx-crowdstrike-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:CRWDXUSDT' },
+            'amazon-xstock': { symbol: 'AMZNX', name: this.currentLanguage === 'fa' ? 'آمازون استاک' : 'Amazon xStock', coingeckoId: 'amazon-xstock', coinpaprikaId: 'amznx-amazon-tokenized-stock-xstock', tradingViewSymbol: 'GATEIO:AMZNXUSDT' },
         };
 
         this.cryptoInfo = cryptoInfoDatabase[this.selectedCrypto] || cryptoInfoDatabase.bitcoin;
@@ -3158,19 +3235,31 @@ displayResults(analysis) {
 displayCryptoInfo(cryptoInfo, cryptoData) {
     const cryptoInfoContent = document.getElementById('cryptoInfoContent');
     
-    // استفاده از تابع جدید برای فرمت‌بندی قیمت
+    // بررسی وجود داده‌های لازم
+    if (!cryptoData || !cryptoInfo) {
+        cryptoInfoContent.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>${this.currentLanguage === 'fa' ? 'داده‌های ارز در دسترس نیست' : 'Currency data not available'}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // استفاده از تابع جدید برای فرمت‌بندی قیمت با بررسی خطا
     const formattedPrice = this.formatPrice(cryptoData.price, cryptoInfo.symbol);
-    const formattedVolume = (cryptoData.volume24h / 1000000000).toFixed(1);
-    const formattedMarketCap = (cryptoData.marketCap / 1000000000).toFixed(1);
+    const formattedVolume = cryptoData.volume24h ? (cryptoData.volume24h / 1000000000).toFixed(1) : '0.0';
+    const formattedMarketCap = cryptoData.marketCap ? (cryptoData.marketCap / 1000000000).toFixed(1) : '0.0';
+    const priceChange24h = cryptoData.priceChange24h || 0;
     
     cryptoInfoContent.innerHTML = `
         <div class="crypto-info-item">
             <div class="label">${this.currentLanguage === 'fa' ? 'نام ارز' : 'Currency Name'}</div>
-            <div class="value">${cryptoInfo.name}</div>
+            <div class="value">${cryptoInfo.name || 'N/A'}</div>
         </div>
         <div class="crypto-info-item">
             <div class="label">${this.currentLanguage === 'fa' ? 'نماد' : 'Symbol'}</div>
-            <div class="value">${cryptoInfo.symbol}</div>
+            <div class="value">${cryptoInfo.symbol || 'N/A'}</div>
         </div>
         <div class="crypto-info-item">
             <div class="label">${this.currentLanguage === 'fa' ? 'قیمت فعلی' : 'Current Price'}</div>
@@ -3178,7 +3267,7 @@ displayCryptoInfo(cryptoInfo, cryptoData) {
         </div>
         <div class="crypto-info-item">
             <div class="label">${this.currentLanguage === 'fa' ? 'تغییر 24h' : '24h Change'}</div>
-            <div class="value ${cryptoData.priceChange24h >= 0 ? 'positive' : 'negative'}">${cryptoData.priceChange24h.toFixed(2)}%</div>
+            <div class="value ${priceChange24h >= 0 ? 'positive' : 'negative'}">${priceChange24h.toFixed(2)}%</div>
         </div>
         <div class="crypto-info-item">
             <div class="label">${this.currentLanguage === 'fa' ? 'حجم 24h' : '24h Volume'}</div>
@@ -3193,7 +3282,19 @@ displayCryptoInfo(cryptoInfo, cryptoData) {
 
 displaySummary(cryptoInfo, cryptoData) {
     const summaryContent = document.getElementById('summaryContent');
-    const trend = cryptoData.priceChange24h >= 0 ? 
+    
+    // بررسی وجود داده‌های لازم
+    if (!cryptoData || !cryptoInfo) {
+        summaryContent.innerHTML = `
+            <div class="error-message">
+                <p>${this.currentLanguage === 'fa' ? 'داده‌های تحلیل در دسترس نیست' : 'Analysis data not available'}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const priceChange24h = cryptoData.priceChange24h || 0;
+    const trend = priceChange24h >= 0 ? 
         (this.currentLanguage === 'fa' ? 'صعودی 📈' : 'Bullish 📈') : 
         (this.currentLanguage === 'fa' ? 'نزولی 📉' : 'Bearish 📉');
     const analysisType = this.analysisType === 'short' ? 
@@ -3202,13 +3303,14 @@ displaySummary(cryptoInfo, cryptoData) {
     
     // استفاده از تابع جدید برای فرمت‌بندی قیمت
     const formattedPrice = this.formatPrice(cryptoData.price, cryptoInfo.symbol);
+    const fearGreedIndex = cryptoData.fearGreedIndex || 50;
     
     summaryContent.innerHTML = `
         <p><strong>${this.currentLanguage === 'fa' ? 'نوع تحلیل:' : 'Analysis Type:'}</strong> ${analysisType}</p>
         <p><strong>${this.currentLanguage === 'fa' ? 'وضعیت فعلی:' : 'Current Status:'}</strong> ${trend}</p>
         <p><strong>${this.currentLanguage === 'fa' ? 'قیمت فعلی:' : 'Current Price:'}</strong> $${formattedPrice}</p>
-        <p><strong>${this.currentLanguage === 'fa' ? 'تغییر 24 ساعته:' : '24h Change:'}</strong> <span class="${cryptoData.priceChange24h >= 0 ? 'positive' : 'negative'}">${cryptoData.priceChange24h.toFixed(2)}%</span></p>
-        <p><strong>${this.currentLanguage === 'fa' ? 'شاخص ترس و طمع:' : 'Fear & Greed Index:'}</strong> ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})</p>
+        <p><strong>${this.currentLanguage === 'fa' ? 'تغییر 24 ساعته:' : '24h Change:'}</strong> <span class="${priceChange24h >= 0 ? 'positive' : 'negative'}">${priceChange24h.toFixed(2)}%</span></p>
+        <p><strong>${this.currentLanguage === 'fa' ? 'شاخص ترس و طمع:' : 'Fear & Greed Index:'}</strong> ${fearGreedIndex} (${this.getFearGreedText(fearGreedIndex)})</p>
         <p><strong>${this.currentLanguage === 'fa' ? 'تحلیل کلی:' : 'Overall Analysis:'}</strong> ${this.getGeneralAnalysis(cryptoData)}</p>
     `;
 }
@@ -3257,21 +3359,33 @@ displayLiveChart(cryptoInfo) {
 displayIndicators() {
     const indicatorsGrid = document.getElementById('indicatorsGrid');
     
-    // استفاده از تابع جدید برای فرمت‌بندی قیمت در شاخص‌ها
-    const formattedSMA20 = this.formatSmallNumber(this.cryptoData.technicalIndicators.sma20);
-    const formattedSMA50 = this.formatSmallNumber(this.cryptoData.technicalIndicators.sma50);
-    const formattedEMA12 = this.formatSmallNumber(this.cryptoData.technicalIndicators.ema12);
-    const formattedEMA26 = this.formatSmallNumber(this.cryptoData.technicalIndicators.ema26);
-    const formattedVWAP = this.formatPrice(this.cryptoData.technicalIndicators.vwap, this.cryptoInfo.symbol);
+    // بررسی وجود technicalIndicators
+    if (!this.cryptoData.technicalIndicators) {
+        indicatorsGrid.innerHTML = `
+            <div class="no-data">
+                <p>${this.currentLanguage === 'fa' ? 'داده‌های شاخص‌ها در دسترس نیست' : 'Indicators data not available'}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const indicators = this.cryptoData.technicalIndicators;
+    
+    // استفاده از توابع جدید برای فرمت‌بندی با بررسی خطا
+    const formattedSMA20 = this.formatSmallNumber(indicators.sma20 || 0);
+    const formattedSMA50 = this.formatSmallNumber(indicators.sma50 || 0);
+    const formattedEMA12 = this.formatSmallNumber(indicators.ema12 || 0);
+    const formattedEMA26 = this.formatSmallNumber(indicators.ema26 || 0);
+    const formattedVWAP = this.formatPrice(indicators.vwap || 0, this.cryptoInfo.symbol);
     
     indicatorsGrid.innerHTML = `
         <div class="indicator-item">
             <div class="name">RSI</div>
-            <div class="value ${this.getRSIClass(this.cryptoData.technicalIndicators.rsi)}">${this.cryptoData.technicalIndicators.rsi}</div>
+            <div class="value ${this.getRSIClass(indicators.rsi || 50)}">${indicators.rsi || 50}</div>
         </div>
         <div class="indicator-item">
             <div class="name">MACD</div>
-            <div class="value ${this.cryptoData.technicalIndicators.macd >= 0 ? 'positive' : 'negative'}">${this.formatSmallNumber(this.cryptoData.technicalIndicators.macd)}</div>
+            <div class="value ${(indicators.macd || 0) >= 0 ? 'positive' : 'negative'}">${this.formatSmallNumber(indicators.macd || 0)}</div>
         </div>
         <div class="indicator-item">
             <div class="name">SMA20</div>
@@ -3295,15 +3409,15 @@ displayIndicators() {
         </div>
         <div class="indicator-item">
             <div class="name">${this.currentLanguage === 'fa' ? 'شاخص ترس و طمع' : 'Fear & Greed Index'}</div>
-            <div class="value ${this.getFearGreedClass(this.cryptoData.fearGreedIndex)}">${this.cryptoData.fearGreedIndex}</div>
+            <div class="value ${this.getFearGreedClass(this.cryptoData.fearGreedIndex || 50)}">${this.cryptoData.fearGreedIndex || 50}</div>
         </div>
         <div class="indicator-item">
             <div class="name">Stochastic</div>
-            <div class="value ${this.getStochasticClass(this.cryptoData.technicalIndicators.stochastic.k)}">${this.cryptoData.technicalIndicators.stochastic.k}/${this.cryptoData.technicalIndicators.stochastic.d}</div>
+            <div class="value ${this.getStochasticClass(indicators.stochastic?.k || 50)}">${indicators.stochastic?.k || 0}/${indicators.stochastic?.d || 0}</div>
         </div>
         <div class="indicator-item">
             <div class="name">ADX</div>
-            <div class="value ${this.getADXClass(this.cryptoData.technicalIndicators.adx)}">${this.cryptoData.technicalIndicators.adx}</div>
+            <div class="value ${this.getADXClass(indicators.adx || 0)}">${indicators.adx || 0}</div>
         </div>
     `;
 }
@@ -3679,5 +3793,4 @@ getGeneralAnalysis(cryptoData) {
 // مقداردهی اولیه
 document.addEventListener('DOMContentLoaded', () => {
     new CryptoAnalyzer();
-
 });
