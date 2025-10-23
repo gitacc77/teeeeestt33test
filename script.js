@@ -4,7 +4,7 @@
  * Smart cryptocurrency analysis with AI power.
  *
  * @author    https://github.com/imotb
- * @version   1.0.0
+ * @version   1.5.0
  * @license   MIT
  */
 class CryptoAnalyzer {
@@ -3679,4 +3679,5 @@ getGeneralAnalysis(cryptoData) {
 // مقداردهی اولیه
 document.addEventListener('DOMContentLoaded', () => {
     new CryptoAnalyzer();
+
 });
