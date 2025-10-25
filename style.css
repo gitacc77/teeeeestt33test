@@ -105,22 +105,17 @@ body[dir="ltr"] .action-buttons {
 .language-switcher {
     display: none;
 }
-/**
-@media (max-width: 768px) {
-        .language-switcher {
-        display: block;
-    }
-    
-    .language-switcher-subtitle {
-        display: none;
-        margin-top: 9px;
-    }
-    
-    .header-subtitle {
-        flex-direction: column;
-        gap: 10px;
-    }
-}**/
+
+
+h1 sub {
+    font-size: 0.5em;   /* تقریباً نصف اندازه اصلی */
+    vertical-align: sub;
+    opacity: 0.7;
+    color: #000000;
+    background-color: #00ffff;
+    border-radius: 25px;
+    padding: 5px;
+}
 
 .lang-btn {
     background: rgba(255, 255, 255, 0.2);
@@ -284,6 +279,7 @@ body[dir="ltr"] .action-buttons {
     font-size: 1.1rem;
     color: #666;
     font-weight: 500;
+    line-height: 1.6;
 }
 
 .analysis-results {
@@ -411,7 +407,7 @@ body[dir="ltr"] .full-analysis-card {
 }
 
 .indicator-item .value {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 700;
 }
 
@@ -582,6 +578,144 @@ body[dir="ltr"] .full-analysis-card {
 
 .full-analysis-content p:last-child {
     margin-bottom: 0;
+}
+
+.error-panel {
+    background: linear-gradient(135deg, #b86bff 0%, #ee5a24 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 30px;
+    margin: 20px 0;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(238, 90, 36, 0.3);
+    animation: slideIn 0.5s ease;
+}
+
+.error-panel .error-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    animation: pulse 2s infinite;
+}
+
+.error-panel h3 {
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.error-panel p {
+    font-size: 1.1rem;
+    margin-bottom: 25px;
+    opacity: 0.9;
+}
+
+.error-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.error-actions .retry-btn,
+.error-actions .close-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 25px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.error-actions .retry-btn {
+    background: white;
+    color: #ee5a24;
+}
+
+.error-actions .retry-btn:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.error-actions .close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.error-actions .close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.error-tips {
+    margin-top: 25px;
+    text-align: right;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.error-tips h4 {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+.error-tips ul {
+    list-style: none;
+    padding: 0;
+}
+
+.error-tips li {
+    margin-bottom: 8px;
+    padding-right: 20px;
+    position: relative;
+}
+
+.error-tips li::before {
+    content: "•";
+    position: absolute;
+    right: 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* پشتیبانی از RTL */
+body[dir="rtl"] .error-tips {
+    text-align: right;
+}
+
+body[dir="ltr"] .error-tips {
+    text-align: left;
+}
+
+body[dir="ltr"] .error-tips li {
+    padding-left: 20px;
+    padding-right: 0;
+}
+
+body[dir="ltr"] .error-tips li::before {
+    left: 0;
+    right: auto;
 }
 
 /* بهبود ریسپانسیو */
