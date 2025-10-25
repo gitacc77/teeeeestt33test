@@ -825,43 +825,67 @@ class CryptoAnalyzer {
     // تابع جدید برای دریافت داده‌های تاریخی از CoinGecko
     async fetchHistoricalDataFromCoinGecko() {
         try {
-            // دریافت داده‌های تاریخی 30 روزه از CoinGecko
-            const endDate = Math.floor(Date.now() / 1000);
-            const startDate = endDate - (30 * 24 * 60 * 60); // 30 روز قبل
+            // دریافت داده‌های تاریخی 365 روزه از CoinGecko (OHLC)
+            const days = 365;
 
-            const response = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/market_chart/range?vs_currency=usd&from=${startDate}&to=${endDate}`);
+            const response = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/ohlc?vs_currency=usd&days=${days}`);
             
             if (!response.ok) {
-                throw new Error('خطا در دریافت داده‌های تاریخی');
+                const errorData = await response.json();
+                throw new Error(`خطا در دریافت داده‌های OHLC: ${errorData.error}`);
             }
 
             const data = await response.json();
             
-            // تبدیل داده‌ها به فرمت مورد نیاز با OHLC
-            const ohlcData = [];
+            // دریافت داده‌های حجم معاملات به صورت جداگانه (چون /ohlc حجم نداره)
+            const endDate = Math.floor(Date.now() / 1000);
             
-            // تبدیل داده‌های قیمت به فرمت OHLC
-            for (let i = 0; i < data.prices.length; i++) {
-                const timestamp = data.prices[i][0];
-                const price = data.prices[i][1];
-                const volume = data.total_volumes[i] ? data.total_volumes[i][1] : 0;
-                
-                // برای سادگی، از قیمت به عنوان Open, High, Low, Close استفاده می‌کنیم
-                // در یک پیاده‌سازی واقعی، باید از API دیگری که داده‌های OHLC واقعی ارائه می‌دهد استفاده کرد
-                ohlcData.push({
-                    date: new Date(timestamp).toISOString().split('T')[0],
-                    open: price,
-                    high: price * 1.02, // شبیه‌سازی 2% نوسان
-                    low: price * 0.98,  // شبیه‌سازی 2% نوسان
-                    close: price,
-                    volume: volume
-                });
+            // <<<---- اصلاحیه در خط زیر اعمال شد: (days + 1) به days تغییر کرد ---->>>
+            const startDate = endDate - (days * 24 * 60 * 60); // دقیقا 365 روز
+            
+            const volumeResponse = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/market_chart/range?vs_currency=usd&from=${startDate}&to=${endDate}`);
+            
+            if (!volumeResponse.ok) {
+                const errorData = await volumeResponse.json();
+                throw new Error(`خطا در دریافت داده‌های حجم: ${errorData.error || 'خطای ناشناخته'}`);
             }
             
-            return ohlcData;
+            const volumeData = await volumeResponse.json();
+            const volumesMap = new Map(volumeData.total_volumes.map(v => {
+                // تاریخ را به فرمت YYYY-MM-DD تبدیل می‌کنیم تا با خروجی /ohlc یکی باشد
+                const dateKey = new Date(v[0]).toISOString().split('T')[0];
+                return [dateKey, v[1]];
+            }));
+
+            // تبدیل داده‌ها به فرمت مورد نیاز
+            const ohlcData = data.map(item => {
+                const timestamp = item[0];
+                const date = new Date(timestamp);
+                const dateString = date.toISOString().split('T')[0];
+                
+                return {
+                    date: dateString,
+                    open: item[1],
+                    high: item[2],
+                    low: item[3],
+                    close: item[4],
+                    volume: volumesMap.get(dateString) || 0 // مپ کردن حجم بر اساس تاریخ
+                };
+            });
+            
+            // فیلتر کردن روزهایی که حجم صفر دارن (معمولا روز جاری که کامل نشده)
+            // و اطمینان از اینکه حداقل 200 کندل برای SMA200 داریم
+            const filteredData = ohlcData.filter(d => d.volume > 0);
+            
+            if (filteredData.length < 200) {
+                console.warn(`داده‌های کافی برای SMA200 دریافت نشد (تعداد: ${filteredData.length}). از داده شبیه‌سازی شده استفاده می‌شود.`);
+                return this.generateSimulatedHistoricalData(); // اگر داده کافی نبود، برگرد به حالت شبیه‌سازی
+            }
+            
+            return filteredData;
 
         } catch (error) {
-            console.error('Error fetching historical data:', error);
+            console.error('Error fetching historical OHLC data:', error);
             // در صورت خطا، داده‌های شبیه‌سازی شده برمی‌گردانیم
             return this.generateSimulatedHistoricalData();
         }
@@ -948,18 +972,20 @@ class CryptoAnalyzer {
         const opens = this.cryptoData.historicalData.map(d => d.open);
         
         // محاسبه اندیکاتورهای اصلی
+        const atrResult = this.calculateATR(highs, lows, closes, 14); // ATR جدید که شامل TR و ATR هموار شده است
+
         this.cryptoData.technicalIndicators = {
             rsi: this.calculateRSI(closes),
             macd: this.calculateMACD(closes),
             sma20: this.calculateSMA(closes, 20),
             sma50: this.calculateSMA(closes, 50),
+            sma200: this.calculateSMA(closes, 200), // <<<---- خط جدید اضافه شد
             ema12: this.calculateEMA(closes, 12),
             ema26: this.calculateEMA(closes, 26),
-            // اندیکاتورهای جدید
             bollingerBands: this.calculateBollingerBands(closes),
             stochastic: this.calculateStochastic(highs, lows, closes),
-            adx: this.calculateADX(highs, lows, closes),
-            atr: this.calculateATR(highs, lows, closes),
+            adx: this.calculateADX(highs, lows, closes, 14, atrResult.smoothedTR), // ADX جدید
+            atr: atrResult.atr, // ATR جدید
             obv: this.calculateOBV(closes, volumes),
             vwap: this.calculateVWAP(closes, volumes),
             ichimoku: this.calculateIchimoku(highs, lows, closes),
@@ -1002,93 +1028,135 @@ class CryptoAnalyzer {
     calculateStochastic(highs, lows, closes, kPeriod = 14, dPeriod = 3) {
         if (closes.length < kPeriod) return { k: 50, d: 50 };
 
-        const recentHighs = highs.slice(-kPeriod);
-        const recentLows = lows.slice(-kPeriod);
-        const currentClose = closes[closes.length - 1];
-        
-        const highestHigh = Math.max(...recentHighs);
-        const lowestLow = Math.min(...recentLows);
-        
-        const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
-        
-        // محاسبه %D که میانگین متحرک %K است
-        const dValues = [];
-        for (let i = 0; i < dPeriod; i++) {
-            if (closes.length - i - kPeriod >= 0) {
-                const periodHighs = highs.slice(-(kPeriod + i), -i);
-                const periodLows = lows.slice(-(kPeriod + i), -i);
-                const periodClose = closes[closes.length - 1 - i];
-                
-                const periodHighestHigh = Math.max(...periodHighs);
-                const periodLowestLow = Math.min(...periodLows);
-                
-                dValues.push(((periodClose - periodLowestLow) / (periodHighestHigh - periodLowestLow)) * 100);
+        let kValues = [];
+
+        // محاسبه K% برای دوره dPeriod + kPeriod
+        for (let i = closes.length - kPeriod - dPeriod + 1; i < closes.length; i++) {
+            if (i < kPeriod - 1) {
+                kValues.push(50); // مقدار اولیه تا داده کافی جمع شود
+                continue;
             }
+            
+            const periodHighs = highs.slice(i - kPeriod + 1, i + 1);
+            const periodLows = lows.slice(i - kPeriod + 1, i + 1);
+            const currentClose = closes[i];
+            
+            const highestHigh = Math.max(...periodHighs);
+            const lowestLow = Math.min(...periodLows);
+            
+            const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+            kValues.push(k);
         }
         
-        const d = dValues.length > 0 ? dValues.reduce((sum, val) => sum + val, 0) / dValues.length : k;
+        const lastK = kValues.length > 0 ? kValues[kValues.length - 1] : 50;
+
+        // محاسبه D% (SMA از K%)
+        const kForDSMA = kValues.slice(-dPeriod);
+        const d = kForDSMA.reduce((sum, val) => sum + val, 0) / kForDSMA.length;
         
         return {
-            k: this.formatCalculationNumber(k),
+            k: this.formatCalculationNumber(lastK),
             d: this.formatCalculationNumber(d)
         };
     }
 
     // تابع جدید برای محاسبه شاخص جهت‌گیری میانگین (ADX)
-    calculateADX(highs, lows, closes, period = 14) {
-        if (closes.length < period + 1) return 0;
+    calculateADX(highs, lows, closes, period = 14, smoothedTR) {
+        if (closes.length < period * 2 || !smoothedTR || smoothedTR.length === 0) return 0; // نیاز به داده‌های کافی
 
-        let plusDM = 0;
-        let minusDM = 0;
-        let sumTR = 0;
+        let plusDM = [];
+        let minusDM = [];
 
-        // محاسبه برای دوره اخیر
-        for (let i = closes.length - period; i < closes.length; i++) {
+        // محاسبه +DM و -DM
+        for (let i = 1; i < highs.length; i++) {
             const upMove = highs[i] - highs[i - 1];
             const downMove = lows[i - 1] - lows[i];
             
-            if (upMove > downMove && upMove > 0) {
-                plusDM += upMove;
-            } else {
-                plusDM += 0;
-            }
-            
-            if (downMove > upMove && downMove > 0) {
-                minusDM += downMove;
-            } else {
-                minusDM += 0;
-            }
-            
-            const highLow = highs[i] - lows[i];
-            const highClose = Math.abs(highs[i] - closes[i - 1]);
-            const lowClose = Math.abs(lows[i] - closes[i - 1]);
-            
-            sumTR += Math.max(highLow, highClose, lowClose);
+            plusDM.push((upMove > downMove && upMove > 0) ? upMove : 0);
+            minusDM.push((downMove > upMove && downMove > 0) ? downMove : 0);
         }
         
-        const plusDI = (plusDM / sumTR) * 100;
-        const minusDI = (minusDM / sumTR) * 100;
-        const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-        
-        return this.formatCalculationNumber(dx);
+        // هموارسازی +DM و -DM
+        // ما به داده‌های هموار شده از همان نقطه‌ای که smoothedTR شروع شده نیاز داریم
+        const offset = closes.length - smoothedTR.length;
+        const smoothedPlusDM = this.smoothWilder(plusDM.slice(offset), period);
+        const smoothedMinusDM = this.smoothWilder(minusDM.slice(offset), period);
+
+        if (smoothedPlusDM.length === 0 || smoothedMinusDM.length === 0) return 0;
+
+        // محاسبه +DI و -DI
+        let plusDI = [];
+        let minusDI = [];
+        let dxValues = [];
+
+        for (let i = 0; i < smoothedTR.length; i++) {
+            if (i >= smoothedPlusDM.length) break; // اطمینان از هم‌اندازه بودن آرایه‌ها
+
+            const tr = smoothedTR[i];
+            const pDI = (tr > 0) ? (smoothedPlusDM[i] / tr) * 100 : 0;
+            const mDI = (tr > 0) ? (smoothedMinusDM[i] / tr) * 100 : 0;
+            
+            plusDI.push(pDI);
+            minusDI.push(mDI);
+            
+            // محاسبه DX
+            const diSum = pDI + mDI;
+            const diDiff = Math.abs(pDI - mDI);
+            const dx = (diSum > 0) ? (diDiff / diSum) * 100 : 0;
+            dxValues.push(dx);
+        }
+
+        // هموارسازی DX برای بدست آوردن ADX
+        const adxValues = this.smoothWilder(dxValues, period);
+        const lastADX = adxValues.length > 0 ? adxValues[adxValues.length - 1] : 0;
+
+        return this.formatCalculationNumber(lastADX);
     }
 
     // تابع جدید برای محاسبه میانگین واقعی دامنه (ATR)
     calculateATR(highs, lows, closes, period = 14) {
-        if (closes.length < period + 1) return 0;
+        if (closes.length < period + 1) return { tr: [], smoothedTR: [], atr: 0 };
 
-        let sumTR = 0;
-
-        // محاسبه برای دوره اخیر
-        for (let i = closes.length - period; i < closes.length; i++) {
+        let trValues = [];
+        for (let i = 1; i < closes.length; i++) {
             const highLow = highs[i] - lows[i];
             const highClose = Math.abs(highs[i] - closes[i - 1]);
             const lowClose = Math.abs(lows[i] - closes[i - 1]);
-            
-            sumTR += Math.max(highLow, highClose, lowClose);
+            trValues.push(Math.max(highLow, highClose, lowClose));
+        }
+
+        // محاسبه ATR هموار شده
+        const smoothedTR = this.smoothWilder(trValues, period);
+        const lastATR = smoothedTR.length > 0 ? smoothedTR[smoothedTR.length - 1] : 0;
+        
+        return {
+            tr: trValues, // True Range خام
+            smoothedTR: smoothedTR, // TR هموار شده (برای ADX لازم است)
+            atr: this.formatCalculationNumber(lastATR) // مقدار نهایی ATR
+        };
+    }
+
+    // تابع کمکی برای هموارسازی Wilder (مورد نیاز برای ATR و ADX)
+    smoothWilder(data, period) {
+        if (data.length < period) return [];
+        
+        let smoothed = [];
+        let sum = 0;
+        
+        // محاسبه SMA برای اولین مقدار
+        for (let i = 0; i < period; i++) {
+            sum += data[i];
+        }
+        smoothed.push(sum / period);
+        
+        // محاسبه هموار شده برای بقیه
+        for (let i = period; i < data.length; i++) {
+            const prevSmoothed = smoothed[smoothed.length - 1];
+            const currentSmoothed = (prevSmoothed * (period - 1) + data[i]) / period;
+            smoothed.push(currentSmoothed);
         }
         
-        return this.formatCalculationNumber(sumTR / period);
+        return smoothed;
     }
 
     // تابع جدید برای محاسبه حجم تعادل (OBV)
@@ -1138,43 +1206,27 @@ class CryptoAnalyzer {
         }
 
         // محاسبه خط تبدیل (Tenkan-sen)
-        let conversionHighs = [];
-        let conversionLows = [];
-        
-        for (let i = closes.length - conversionPeriod; i < closes.length; i++) {
-            conversionHighs.push(highs[i]);
-            conversionLows.push(lows[i]);
-        }
-        
+        const conversionHighs = highs.slice(-conversionPeriod);
+        const conversionLows = lows.slice(-conversionPeriod);
         const conversionLine = (Math.max(...conversionHighs) + Math.min(...conversionLows)) / 2;
         
         // محاسبه خط پایه (Kijun-sen)
-        let baseHighs = [];
-        let baseLows = [];
-        
-        for (let i = closes.length - basePeriod; i < closes.length; i++) {
-            baseHighs.push(highs[i]);
-            baseLows.push(lows[i]);
-        }
-        
+        const baseHighs = highs.slice(-basePeriod);
+        const baseLows = lows.slice(-basePeriod);
         const baseLine = (Math.max(...baseHighs) + Math.min(...baseLows)) / 2;
         
         // محاسبه پیشرو A (Senkou Span A)
         const leadingSpanA = (conversionLine + baseLine) / 2;
         
         // محاسبه پیشرو B (Senkou Span B)
-        let laggingHighs = [];
-        let laggingLows = [];
-        
-        for (let i = closes.length - laggingSpanPeriod; i < closes.length; i++) {
-            laggingHighs.push(highs[i]);
-            laggingLows.push(lows[i]);
-        }
-        
+        const laggingHighs = highs.slice(-laggingSpanPeriod);
+        const laggingLows = lows.slice(-laggingSpanPeriod);
         const leadingSpanB = (Math.max(...laggingHighs) + Math.min(...laggingLows)) / 2;
         
         // محاسبه تأخیری (Chikou Span)
-        const laggingSpan = closes.length > displacement ? closes[closes.length - displacement] : closes[0];
+        // <<<---- اصلاح باگ در این خط ---->>>
+        // قیمت بسته شدن فعلی که به اندازه 'displacement' به عقب منتقل شده
+        const laggingSpan = closes[closes.length - 1 - displacement] || closes[0]; 
         
         return {
             conversionLine: this.formatCalculationNumber(conversionLine),
@@ -2308,6 +2360,39 @@ class CryptoAnalyzer {
         }
     }
 
+    async fetchEthereumData() {
+        try {
+            // استفاده از API رایگان Blockscout برای داده‌های اتریوم
+            const response = await fetch('https://eth.blockscout.com/api/v2/stats');
+            
+            if (!response.ok) {
+                throw new Error('خطا در دریافت داده‌های اتریوم از Blockscout');
+            }
+            
+            const data = await response.json();
+            
+            // استخراج و مپ کردن داده‌ها به فرمتی که بقیه کد انتظار دارد
+            this.cryptoData.blockchain = {
+                networkDifficulty: parseFloat(data.network_difficulty || 0),
+                hashRate: parseFloat(data.hash_rate || 0),
+                transactionCount: data.total_transactions ? parseInt(data.total_transactions) : 0,
+                activeAddresses: data.active_addresses || 0,
+                transactionVolume: parseFloat(data.transactions_today || 0), // شبیه‌سازی تقریبی
+                stats: {
+                    difficulty: parseFloat(data.network_difficulty || 0),
+                    hash_rate: parseFloat(data.hash_rate || 0),
+                    tx_count: data.total_transactions ? parseInt(data.total_transactions) : 0,
+                    average_transaction_fee: parseFloat(data.gas_price || 0) / 1e9 // تبدیل Gwei به ETH
+                }
+            };
+            
+        } catch (error) {
+            console.error('Error fetching Ethereum data:', error);
+            // در صورت خطا، از داده‌های شبیه‌سازی شده استفاده کن
+            this.cryptoData.blockchain = this.generateOptimizedSimulatedData();
+        }
+    }
+
     // تابع جدید برای تولید داده‌های شبیه‌سازی شده بلاکچین
     generateSimulatedBlockchainData() {
         const basePrice = this.cryptoData.price || 100;
@@ -2761,9 +2846,92 @@ class CryptoAnalyzer {
         }
     }
 
+    getCurrentDateTime() {
+        const now = new Date();
+        
+        if (this.currentLanguage === 'fa') {
+            // تاریخ شمسی برای فارسی
+            const persianDate = new Intl.DateTimeFormat('fa-IR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long'
+            }).format(now);
+            
+            const time = new Intl.DateTimeFormat('fa-IR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            }).format(now);
+            
+            return {
+                date: persianDate,
+                time: time,
+                full: `${persianDate} - ساعت ${time}`,
+                iso: now.toISOString(),
+                timestamp: now.getTime()
+            };
+        } else {
+            // تاریخ میلادی برای انگلیسی
+            const englishDate = new Intl.DateTimeFormat('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long'
+            }).format(now);
+            
+            const time = new Intl.DateTimeFormat('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            }).format(now);
+            
+            return {
+                date: englishDate,
+                time: time,
+                full: `${englishDate} - ${time}`,
+                iso: now.toISOString(),
+                timestamp: now.getTime()
+            };
+        }
+    }
+
+    // تابع کمکی برای دریافت اطلاعات زمانی تحلیل
+    getAnalysisTimeContext() {
+        const current = this.getCurrentDateTime();
+        const now = new Date();
+        
+        if (this.currentLanguage === 'fa') {
+            return {
+                currentDate: current.date,
+                currentTime: current.time,
+                currentFull: current.full,
+                year: now.getFullYear(),
+                month: now.getMonth() + 1,
+                day: now.getDate(),
+                context: `تحلیل در تاریخ ${current.date} و ساعت ${current.time} انجام شده است. لطفاً تحلیل خود را بر اساس شرایط فعلی بازار در این تاریخ ارائه دهید.`
+            };
+        } else {
+            return {
+                currentDate: current.date,
+                currentTime: current.time,
+                currentFull: current.full,
+                year: now.getFullYear(),
+                month: now.getMonth() + 1,
+                day: now.getDate(),
+                context: `Analysis performed on ${current.date} at ${current.time}. Please provide your analysis based on current market conditions as of this date.`
+            };
+        }
+    }
+
     generatePrompt() {
         const cryptoData = this.cryptoData;
         const cryptoInfo = this.cryptoInfo;
+        
+        // دریافت اطلاعات زمانی فعلی
+        const timeContext = this.getAnalysisTimeContext();
         
         // استفاده از تابع جدید برای فرمت‌بندی قیمت
         const formattedPrice = this.formatPrice(cryptoData.price, cryptoInfo.symbol);
@@ -2787,10 +2955,13 @@ class CryptoAnalyzer {
         // داده‌های بلاکچین و متریک‌های پیشرفته
         const blockchainData = cryptoData.blockchain || {};
         const stats = blockchainData.stats || {};
-        
+
         if (this.currentLanguage === 'fa') {
             if (this.analysisType === 'short') {
                 return `لطفاً یک تحلیل کوتاه مدت جامع و بسیار دقیق برای ارز دیجیتال ${cryptoInfo.name} (${cryptoInfo.symbol}) ارائه دهید.
+
+    ⏰ **اطلاعات زمانی تحلیل:**
+    ${timeContext.context}
 
     تحلیل کوتاه مدت باید روی موارد زیر تمرکز کند:
     - تحلیل تکنیکال پیشرفته با داده‌های لحظه‌ای
@@ -2846,6 +3017,9 @@ class CryptoAnalyzer {
     🧠 **شاخص احساسات بازار:**
     - شاخص ترس و طمع: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
 
+    **توجه بسیار مهم:** 
+    این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل خود را کاملاً بر اساس شرایط فعلی بازار و داده‌های ارائه شده در این تاریخ انجام دهید. از اشاره به رویدادها یا شرایط تاریخی گذشته خودداری کنید.
+
     لطفاً تحلیل شامل موارد زیر باشد:
 
     🔍 **تحلیل فنی پیشرفته:**
@@ -2877,11 +3051,12 @@ class CryptoAnalyzer {
     - سناریو جایگزین (20% احتمال) 
     - سناریو ریسکی (10% احتمال)
 
-    توجه: تمام داده‌های فوق لحظه‌ای، واقعی و بر اساس آخرین اطلاعات بازار می‌باشند.
-
-    پاسخ را به زبان فارسی و به صورت ساختار یافته با استفاده از مارک‌داون ارائه دهید. از ### برای عناوین اصلی و ** برای تاکید استفاده کنید. در نقش یک تحلیلگر تکنیکال حرفه‌ای با 15 سال تجربه در بازارهای مالی، تحلیل جامعی ارائه دهید که شامل نقاط ورود/خروج دقیق، مدیریت ریسک پیشرفته و سناریوهای مختلف باشد.`;
+    پاسخ را به زبان فارسی و به صورت ساختار یافته با استفاده از مارک‌داون ارائه دهید. از ### برای عناوین اصلی و ** برای تاکید استفاده کنید. در نقش یک تحلیلگر تکنیکال حرفه‌ای با 10 سال تجربه در بازارهای مالی، تحلیل جامعی ارائه دهید که شامل نقاط ورود/خروج دقیق، مدیریت ریسک پیشرفته و سناریوهای مختلف باشد.`;
             } else {
                 return `لطفاً یک تحلیل بلند مدت جامع و بسیار دقیق برای ارز دیجیتال ${cryptoInfo.name} (${cryptoInfo.symbol}) ارائه دهید.
+
+    ⏰ **اطلاعات زمانی تحلیل:**
+    ${timeContext.context}
 
     تحلیل بلند مدت باید روی موارد زیر تمرکز کند:
     - تحلیل فاندامنتال عمیق پروژه و تکنولوژی
@@ -2936,6 +3111,9 @@ class CryptoAnalyzer {
     - شاخص ترس و طمع: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
     - دامیننس بیت‌کوین: ${stats.bitcoin_dominance ? stats.bitcoin_dominance.toFixed(1) + '%' : 'نامشخص'}
 
+    **توجه بسیار مهم:** 
+    این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل بلندمدت خود را با توجه به شرایط فعلی بازار و چشم‌انداز آینده بر اساس وضعیت کنونی ارائه دهید.
+
     لطفاً تحلیل شامل موارد زیر باشد:
 
     🔍 **تحلیل فاندامنتال عمیق:**
@@ -2974,13 +3152,14 @@ class CryptoAnalyzer {
     3. ریسک‌های بازار و رقابتی
     4. راهکارهای کاهش ریسک
 
-    توجه: تمام داده‌های فوق لحظه‌ای، واقعی و بر اساس آخرین اطلاعات بازار می‌باشند.
-
-    پاسخ را به زبان فارسی و به صورت ساختار یافته با استفاده از مارک‌داون ارائه دهید. از ### برای عناوین اصلی و ** برای تاکید استفاده کنید. در نقش یک تحلیلگر ارشد با 15 سال تجربه در بازارهای مالی و تخصص در فناوری بلاکچین، تحلیل جامعی ارائه دهید که شامل ارزیابی فاندامنتال، تکنیکال و روی‌زنجیره باشد.`;
+    پاسخ را به زبان فارسی و به صورت ساختار یافته با استفاده از مارک‌داون ارائه دهید. از ### برای عناوین اصلی و ** برای تاکید استفاده کنید. در نقش یک تحلیلگر ارشد با 10 سال تجربه در بازارهای مالی و تخصص در فناوری بلاکچین، تحلیل جامعی ارائه دهید که شامل ارزیابی فاندامنتال، تکنیکال و روی‌زنجیره باشد.`;
             }
         } else {
             if (this.analysisType === 'short') {
                 return `Please provide a comprehensive and highly detailed short-term analysis for the cryptocurrency ${cryptoInfo.name} (${cryptoInfo.symbol}).
+
+    ⏰ **Analysis Time Information:**
+    ${timeContext.context}
 
     Short-term analysis should focus on:
     - Advanced technical analysis with real-time data
@@ -3036,6 +3215,9 @@ class CryptoAnalyzer {
     🧠 **Market Sentiment:**
     - Fear & Greed Index: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
 
+    **CRITICAL NOTE:**
+    This analysis was performed on ${timeContext.currentDate} at ${timeContext.currentTime}. Please provide your analysis entirely based on current market conditions and data as of this date. Do not refer to past historical events or conditions.
+
     Please include the following in your analysis:
 
     🔍 **Advanced Technical Analysis:**
@@ -3067,11 +3249,12 @@ class CryptoAnalyzer {
     - Alternative Scenario (20% probability)
     - Risk Scenario (10% probability)
 
-    Note: All data above is real-time, actual and based on the latest market information.
-
-    Respond in English and use structured markdown. Use ### for main headings and ** for emphasis. As a professional technical analyst with 15 years of experience in financial markets, provide a comprehensive analysis that includes precise entry/exit points, advanced risk management, and various scenarios.`;
+    Respond in English and use structured markdown. Use ### for main headings and ** for emphasis. As a professional technical analyst with 10 years of experience in financial markets, provide a comprehensive analysis that includes precise entry/exit points, advanced risk management, and various scenarios.`;
             } else {
                 return `Please provide a comprehensive and highly detailed long-term analysis for the cryptocurrency ${cryptoInfo.name} (${cryptoInfo.symbol}).
+
+    ⏰ **Analysis Time Information:**
+    ${timeContext.context}
 
     Long-term analysis should focus on:
     - Deep fundamental analysis of project and technology
@@ -3126,6 +3309,9 @@ class CryptoAnalyzer {
     - Fear & Greed Index: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
     - Bitcoin Dominance: ${stats.bitcoin_dominance ? stats.bitcoin_dominance.toFixed(1) + '%' : 'Unknown'}
 
+    **CRITICAL NOTE:**
+    This analysis was performed on ${timeContext.currentDate} at ${timeContext.currentTime}. Please provide your long-term analysis considering current market conditions and future outlook based on the present situation.
+
     Please include the following in your analysis:
 
     🔍 **Deep Fundamental Analysis:**
@@ -3164,9 +3350,7 @@ class CryptoAnalyzer {
     3. Market and competitive risks
     4. Risk mitigation strategies
 
-    Note: All data above is real-time, actual and based on the latest market information.
-
-    Respond in English and use structured markdown. Use ### for main headings and ** for emphasis. As a senior analyst with 15 years of experience in financial markets and blockchain technology expertise, provide a comprehensive analysis that includes fundamental, technical and on-chain assessment.`;
+    Respond in English and use structured markdown. Use ### for main headings and ** for emphasis. As a senior analyst with 10 years of experience in financial markets and blockchain technology expertise, provide a comprehensive analysis that includes fundamental, technical and on-chain assessment.`;
             }
         }
     }
@@ -3371,21 +3555,29 @@ displayIndicators() {
     
     const indicators = this.cryptoData.technicalIndicators;
     
+    // استفاده از (??) به جای (||) برای پذیرفتن مقدار 0
+    const rsiValue = indicators.rsi ?? 50;
+    const macdValue = indicators.macd ?? 0;
+    const fearGreedValue = this.cryptoData.fearGreedIndex ?? 50;
+    const stochasticK = indicators.stochastic?.k ?? 0;
+    const stochasticD = indicators.stochastic?.d ?? 0;
+    const adxValue = indicators.adx ?? 0;
+
     // استفاده از توابع جدید برای فرمت‌بندی با بررسی خطا
-    const formattedSMA20 = this.formatSmallNumber(indicators.sma20 || 0);
-    const formattedSMA50 = this.formatSmallNumber(indicators.sma50 || 0);
-    const formattedEMA12 = this.formatSmallNumber(indicators.ema12 || 0);
-    const formattedEMA26 = this.formatSmallNumber(indicators.ema26 || 0);
-    const formattedVWAP = this.formatPrice(indicators.vwap || 0, this.cryptoInfo.symbol);
+    const formattedSMA20 = this.formatSmallNumber(indicators.sma20 ?? 0);
+    const formattedSMA50 = this.formatSmallNumber(indicators.sma50 ?? 0);
+    const formattedEMA12 = this.formatSmallNumber(indicators.ema12 ?? 0);
+    const formattedEMA26 = this.formatSmallNumber(indicators.ema26 ?? 0);
+    const formattedVWAP = this.formatPrice(indicators.vwap ?? 0, this.cryptoInfo.symbol);
     
     indicatorsGrid.innerHTML = `
         <div class="indicator-item">
             <div class="name">RSI</div>
-            <div class="value ${this.getRSIClass(indicators.rsi || 50)}">${indicators.rsi || 50}</div>
+            <div class="value ${this.getRSIClass(rsiValue)}">${rsiValue.toFixed(2)}</div>
         </div>
         <div class="indicator-item">
             <div class="name">MACD</div>
-            <div class="value ${(indicators.macd || 0) >= 0 ? 'positive' : 'negative'}">${this.formatSmallNumber(indicators.macd || 0)}</div>
+            <div class="value ${macdValue >= 0 ? 'positive' : 'negative'}">${this.formatSmallNumber(macdValue)}</div>
         </div>
         <div class="indicator-item">
             <div class="name">SMA20</div>
@@ -3409,15 +3601,15 @@ displayIndicators() {
         </div>
         <div class="indicator-item">
             <div class="name">${this.currentLanguage === 'fa' ? 'شاخص ترس و طمع' : 'Fear & Greed Index'}</div>
-            <div class="value ${this.getFearGreedClass(this.cryptoData.fearGreedIndex || 50)}">${this.cryptoData.fearGreedIndex || 50}</div>
+            <div class="value ${this.getFearGreedClass(fearGreedValue)}">${fearGreedValue}</div>
         </div>
         <div class="indicator-item">
             <div class="name">Stochastic</div>
-            <div class="value ${this.getStochasticClass(indicators.stochastic?.k || 50)}">${indicators.stochastic?.k || 0}/${indicators.stochastic?.d || 0}</div>
+            <div class="value ${this.getStochasticClass(stochasticK)}">${stochasticK.toFixed(2)} / ${stochasticD.toFixed(2)}</div>
         </div>
         <div class="indicator-item">
             <div class="name">ADX</div>
-            <div class="value ${this.getADXClass(indicators.adx || 0)}">${indicators.adx || 0}</div>
+            <div class="value ${this.getADXClass(adxValue)}">${adxValue.toFixed(2)}</div>
         </div>
     `;
 }
