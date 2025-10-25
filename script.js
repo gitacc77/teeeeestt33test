@@ -4,7 +4,7 @@
  * Smart cryptocurrency analysis with AI power.
  *
  * @author    https://github.com/imotb
- * @version   1.0.0
+ * @version   2.0.0
  * @license   MIT
  */
 class CryptoAnalyzer {
@@ -435,9 +435,10 @@ class CryptoAnalyzer {
             this.displayNews(news);
 
             // 🔄 مرحله 8: تحلیل هوشمند با AI
-            this.updateStatus(this.currentLanguage === 'fa' ? 
-                'در حال تحلیل هوشمند با AI...' : 
-                'Performing AI analysis...');
+            this.updateStatus(
+            this.currentLanguage === 'fa' ?
+            'در حال تحلیل هوشمند با AI... (حدودا ۱۲۰ ثانیه صبر کنید)':
+            'Performing AI analysis... (Wait about 120 seconds)');
             
             const analysis = await this.performAIAnalysis();
             
