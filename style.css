@@ -769,7 +769,7 @@ body[dir="ltr"] .error-tips li::before {
     }
     
     .header h1 {
-        font-size: 1.5rem;
+        font-size: 1.6rem;
     }
     
     .radio-group {
@@ -2048,4 +2048,3 @@ body[dir="rtl"] .footer-github a {
 body[dir="rtl"] .alterday-text {
     direction: ltr;
 }
-
