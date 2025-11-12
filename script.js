@@ -833,15 +833,13 @@ class CryptoAnalyzer {
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`خطا در دریافت داده‌های OHLC: ${errorData.error}`);
+                throw new Error(`خطا در دریافت داده‌های OHLC: ${errorData.error || response.statusText}`);
             }
 
             const data = await response.json();
             
             // دریافت داده‌های حجم معاملات به صورت جداگانه (چون /ohlc حجم نداره)
             const endDate = Math.floor(Date.now() / 1000);
-            
-            // <<<---- اصلاحیه در خط زیر اعمال شد: (days + 1) به days تغییر کرد ---->>>
             const startDate = endDate - (days * 24 * 60 * 60); // دقیقا 365 روز
             
             const volumeResponse = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/market_chart/range?vs_currency=usd&from=${startDate}&to=${endDate}`);
@@ -875,95 +873,30 @@ class CryptoAnalyzer {
             });
             
             // فیلتر کردن روزهایی که حجم صفر دارن (معمولا روز جاری که کامل نشده)
-            // و اطمینان از اینکه حداقل 200 کندل برای SMA200 داریم
             const filteredData = ohlcData.filter(d => d.volume > 0);
             
             if (filteredData.length < 200) {
-                console.warn(`داده‌های کافی برای SMA200 دریافت نشد (تعداد: ${filteredData.length}). از داده شبیه‌سازی شده استفاده می‌شود.`);
-                return this.generateSimulatedHistoricalData(); // اگر داده کافی نبود، برگرد به حالت شبیه‌سازی
+                console.warn(`داده‌های کافی برای SMA200 دریافت نشد (تعداد: ${filteredData.length}). ممکن است این شاخص دقیق نباشد.`);
             }
             
             return filteredData;
 
         } catch (error) {
             console.error('Error fetching historical OHLC data:', error);
-            // در صورت خطا، داده‌های شبیه‌سازی شده برمی‌گردانیم
-            return this.generateSimulatedHistoricalData();
+            // پرتاب خطا برای مدیریت در سطح بالاتر
+            throw new Error(this.currentLanguage === 'fa' ? 
+                `خطا در دریافت داده‌های تاریخی: ${error.message}` : 
+                `Error fetching historical data: ${error.message}`);
         }
-    }
-
-    async fetchHistoricalData() {
-        try {
-            // دریافت داده‌های تاریخی 30 روزه از CoinGecko
-            const endDate = Math.floor(Date.now() / 1000);
-            const startDate = endDate - (30 * 24 * 60 * 60); // 30 روز قبل
-
-            const response = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/market_chart/range?vs_currency=usd&from=${startDate}&to=${endDate}`);
-            
-            if (!response.ok) {
-                throw new Error('خطا در دریافت داده‌های تاریخی');
-            }
-
-            const data = await response.json();
-            
-            // تبدیل داده‌ها به فرمت مورد نیاز
-            return data.prices.map((price, index) => ({
-                date: new Date(price[0]).toISOString().split('T')[0],
-                price: price[1],
-                volume: data.total_volumes[index] ? data.total_volumes[index][1] : 0
-            }));
-
-        } catch (error) {
-            console.error('Error fetching historical data:', error);
-            // در صورت خطا، داده‌های شبیه‌سازی شده برمی‌گردانیم
-            return this.generateSimulatedHistoricalData();
-        }
-    }
-
-    generateSimulatedHistoricalData() {
-        const data = [];
-        const basePrice = this.cryptoData.price || 100;
-        const endDate = new Date();
-        
-        // تولید داده‌های شبیه‌سازی شده با نوسانات واقعی‌تر
-        let currentPrice = basePrice * 0.95; // شروع از 5% پایین‌تر
-        
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date(endDate);
-            date.setDate(date.getDate() - i);
-            
-            // شبیه‌سازی نوسانات قیمت با روند کلی صعودی
-            const trendFactor = 1 + (0.01 * (29 - i) / 29); // روند صعودی تدریجی
-            const randomChange = (Math.random() - 0.48) * 0.08; // کمی تمایل به صعودی
-            const price = currentPrice * (1 + randomChange) * trendFactor;
-            
-            // محاسبه OHLC بر اساس قیمت
-            const volatility = price * 0.03; // 3% نوسان
-            const open = currentPrice;
-            const close = price;
-            const high = Math.max(open, close) + (Math.random() * volatility);
-            const low = Math.min(open, close) - (Math.random() * volatility);
-            
-            data.push({
-                date: date.toISOString().split('T')[0],
-                open: open,
-                high: high,
-                low: low,
-                close: close,
-                volume: Math.random() * 1000000000 + 500000000 // حجم معاملات تصادفی
-            });
-            
-            currentPrice = price;
-        }
-        
-        return data;
     }
 
     async calculateTechnicalIndicators() {
         // اطمینان از وجود داده‌های تاریخی
-        if (!this.cryptoData.historicalData || this.cryptoData.historicalData.length === 0) {
-            console.warn('No historical data available, generating simulated data');
-            this.cryptoData.historicalData = this.generateSimulatedHistoricalData();
+        if (!this.cryptoData.historicalData || this.cryptoData.historicalData.length < 2) {
+            console.error('No historical data available for technical indicators.');
+            throw new Error(this.currentLanguage === 'fa' ? 
+                'داده‌های تاریخی برای محاسبه شاخص‌ها موجود نیست.' : 
+                'Historical data not available for calculating indicators.');
         }
         
         const closes = this.cryptoData.historicalData.map(d => d.close);
@@ -980,7 +913,7 @@ class CryptoAnalyzer {
             macd: this.calculateMACD(closes),
             sma20: this.calculateSMA(closes, 20),
             sma50: this.calculateSMA(closes, 50),
-            sma200: this.calculateSMA(closes, 200), // <<<---- خط جدید اضافه شد
+            sma200: this.calculateSMA(closes, 200),
             ema12: this.calculateEMA(closes, 12),
             ema26: this.calculateEMA(closes, 26),
             bollingerBands: this.calculateBollingerBands(closes),
@@ -1220,21 +1153,23 @@ class CryptoAnalyzer {
         const leadingSpanA = (conversionLine + baseLine) / 2;
         
         // محاسبه پیشرو B (Senkou Span B)
+        // برای محاسبه Span B، ما به 52 کندل *قبل* از 26 کندل آینده نیاز داریم
+        // اما برای سادگی، Span B فعلی را بر اساس 52 کندل اخیر محاسبه می‌کنیم.
         const laggingHighs = highs.slice(-laggingSpanPeriod);
         const laggingLows = lows.slice(-laggingSpanPeriod);
         const leadingSpanB = (Math.max(...laggingHighs) + Math.min(...laggingLows)) / 2;
         
         // محاسبه تأخیری (Chikou Span)
         // <<<---- اصلاح باگ در این خط ---->>>
-        // قیمت بسته شدن فعلی که به اندازه 'displacement' به عقب منتقل شده
-        const laggingSpan = closes[closes.length - 1 - displacement] || closes[0]; 
+        // Chikou Span (Lagging Span) قیمت بسته شدن *فعلی* است
+        const laggingSpan = closes[closes.length - 1]; 
         
         return {
             conversionLine: this.formatCalculationNumber(conversionLine),
             baseLine: this.formatCalculationNumber(baseLine),
-            leadingSpanA: this.formatCalculationNumber(leadingSpanA),
-            leadingSpanB: this.formatCalculationNumber(leadingSpanB),
-            laggingSpan: this.formatCalculationNumber(laggingSpan)
+            leadingSpanA: this.formatCalculationNumber(leadingSpanA), // این مقدار باید 26 دوره در آینده رسم شود
+            leadingSpanB: this.formatCalculationNumber(leadingSpanB), // این مقدار باید 26 دوره در آینده رسم شود
+            laggingSpan: this.formatCalculationNumber(laggingSpan) // این مقدار باید 26 دوره در گذشته رسم شود
         };
     }
 
@@ -1767,18 +1702,6 @@ class CryptoAnalyzer {
         return data.choices[0].message.content;
     }
 
-    // تابع جدید برای دریافت داده‌های تاریخی از CoinPaprika
-    async fetchHistoricalData() {
-        try {
-            // استفاده از تابع جدید برای دریافت داده‌های تاریخی از CoinGecko
-            return await this.fetchHistoricalDataFromCoinGecko();
-        } catch (error) {
-            console.error('Error fetching historical data:', error);
-            // در صورت خطا، داده‌های شبیه‌سازی شده برمی‌گردانیم
-            return this.generateSimulatedHistoricalData();
-        }
-    }
-
     // تابع جدید برای دریافت داده‌های صرافی‌ها
     async fetchExchangeData() {
         try {
@@ -2260,47 +2183,34 @@ class CryptoAnalyzer {
                 await this.fetchEthereumData();
             }
             else {
-                // برای سایر ارزها از داده‌های بهینه‌تر شبیه‌سازی شده
-                this.cryptoData.blockchain = this.generateOptimizedSimulatedData();
+                // برای سایر ارزها، API بلاکچین در حال حاضر پشتیبانی نمی‌شود
+                console.warn(`Blockchain data API not supported for ${symbol}. Skipping.`);
+                this.cryptoData.blockchain = {
+                    stats: {},
+                    marketData: {},
+                    networkDifficulty: 0,
+                    hashRate: 0,
+                    transactionCount: 0,
+                    activeAddresses: 0,
+                    transactionVolume: 0
+                };
             }
             
             console.log('Blockchain data processed:', this.cryptoData.blockchain);
             
         } catch (error) {
             console.error('Error in fetchBlockchainData:', error);
-            this.cryptoData.blockchain = this.generateOptimizedSimulatedData();
+            // در صورت بروز خطا، داده خالی برمی‌گردانیم
+            this.cryptoData.blockchain = {
+                stats: {},
+                marketData: {},
+                networkDifficulty: 0,
+                hashRate: 0,
+                transactionCount: 0,
+                activeAddresses: 0,
+                transactionVolume: 0
+            };
         }
-    }
-
-    // داده‌های شبیه‌سازی شده بهینه‌تر
-    generateOptimizedSimulatedData() {
-        const basePrice = this.cryptoData.price || 100;
-        const symbol = this.cryptoInfo.symbol;
-        
-        // ضریب بر اساس نوع ارز
-        let multiplier = 1;
-        if (['ETH', 'BNB', 'SOL'].includes(symbol)) multiplier = 0.8;
-        if (['SHIB', 'PEPE', 'DOGE'].includes(symbol)) multiplier = 2.5;
-        
-        const simulatedData = {
-            networkDifficulty: basePrice * 100000000 * multiplier,
-            hashRate: basePrice * 500000000000 * multiplier,
-            transactionCount: Math.floor(basePrice * 5000 * multiplier),
-            activeAddresses: Math.floor(basePrice * 2500 * multiplier),
-            transactionVolume: basePrice * 25000000 * multiplier,
-            stats: {
-                difficulty: basePrice * 100000000 * multiplier,
-                hash_rate: basePrice * 500000000000 * multiplier,
-                tx_count: Math.floor(basePrice * 5000 * multiplier),
-                n_btc_mempool_txs: Math.floor(basePrice * 50),
-                total_btc_sent: basePrice * 25000000 * multiplier,
-                miners_revenue_usd: basePrice * 500000,
-                market_price_usd: basePrice,
-                average_transaction_fee: basePrice * 0.0001
-            }
-        };
-        
-        return simulatedData;
     }
 
     // تابع جدید برای دریافت آمار بیت‌کوین با API به‌روز
@@ -2389,37 +2299,11 @@ class CryptoAnalyzer {
             
         } catch (error) {
             console.error('Error fetching Ethereum data:', error);
-            // در صورت خطا، از داده‌های شبیه‌سازی شده استفاده کن
-            this.cryptoData.blockchain = this.generateOptimizedSimulatedData();
+            // پرتاب خطا تا در fetchBlockchainData مدیریت شود
+            throw new Error(this.currentLanguage === 'fa' ? 
+                'خطا در دریافت داده‌های اتریوم' : 
+                'Error fetching Ethereum data');
         }
-    }
-
-    // تابع جدید برای تولید داده‌های شبیه‌سازی شده بلاکچین
-    generateSimulatedBlockchainData() {
-        const basePrice = this.cryptoData.price || 100;
-        const symbol = this.cryptoInfo.symbol;
-        
-        // داده‌های شبیه‌سازی شده بر اساس قیمت و نماد
-        const simulatedData = {
-            networkDifficulty: basePrice * 100000000,
-            hashRate: basePrice * 500000000000,
-            transactionCount: Math.floor(basePrice * 5000),
-            activeAddresses: Math.floor(basePrice * 2500),
-            transactionVolume: basePrice * 25000000,
-            stats: {
-                difficulty: basePrice * 100000000,
-                hash_rate: basePrice * 500000000000,
-                tx_count: Math.floor(basePrice * 5000),
-                n_btc_mempool_txs: Math.floor(basePrice * 50),
-                total_btc_sent: basePrice * 25000000,
-                miners_revenue_usd: basePrice * 500000,
-                market_price_usd: basePrice,
-                average_transaction_fee: basePrice * 0.0001
-            }
-        };
-        
-        console.log('Generated simulated blockchain data for', symbol, ':', simulatedData);
-        return simulatedData;
     }
 
     // تابع برای دریافت استخرهای ماینینگ
@@ -2456,6 +2340,9 @@ class CryptoAnalyzer {
         try {
             if (!this.cryptoData.blockchain) {
                 console.warn('No blockchain data available for advanced metrics');
+                this.cryptoData.nvtRatio = 0;
+                this.cryptoData.mayerMultiple = 0;
+                this.cryptoData.puellMultiple = 0;
                 return;
             }
             
@@ -2466,62 +2353,44 @@ class CryptoAnalyzer {
             console.log('Calculating advanced metrics with:', { price, marketCap, blockchain });
             
             // محاسبه NVT Ratio (Network Value to Transactions)
-            if (blockchain.transactionVolume && price && marketCap) {
+            if (blockchain.transactionVolume && price && marketCap && blockchain.transactionVolume > 0) {
                 const dailyTransactionVolume = blockchain.transactionVolume;
-                this.cryptoData.nvtRatio = dailyTransactionVolume > 0 ? 
-                    marketCap / dailyTransactionVolume : 0;
+                this.cryptoData.nvtRatio = marketCap / dailyTransactionVolume;
                 console.log('NVT Ratio calculated:', this.cryptoData.nvtRatio);
             } else {
-                this.cryptoData.nvtRatio = this.generateSimulatedNVT();
+                this.cryptoData.nvtRatio = 0; // داده موجود نیست
             }
             
-            // محاسبه Mayer Multiple
-            if (price && blockchain.stats) {
-                // استفاده از میانگین 200 روزه شبیه‌سازی شده
-                const _200DayMA = price * 0.85; // فرض می‌کنیم قیمت 15% بالاتر از میانگین 200 روزه است
-                this.cryptoData.mayerMultiple = _200DayMA > 0 ? price / _200DayMA : 0;
-                console.log('Mayer Multiple calculated:', this.cryptoData.mayerMultiple);
+            // محاسبه Mayer Multiple با استفاده از SMA 200 واقعی
+            if (price && this.cryptoData.technicalIndicators && this.cryptoData.technicalIndicators.sma200 && this.cryptoData.technicalIndicators.sma200 > 0) {
+                const _200DayMA = this.cryptoData.technicalIndicators.sma200;
+                this.cryptoData.mayerMultiple = price / _200DayMA;
+                console.log('Mayer Multiple calculated (real):', this.cryptoData.mayerMultiple, 'using SMA200:', _200DayMA);
             } else {
-                this.cryptoData.mayerMultiple = this.generateSimulatedMayerMultiple();
+                console.warn('Real SMA200 not available or is zero, cannot calculate Mayer Multiple.');
+                this.cryptoData.mayerMultiple = 0; // داده موجود نیست
             }
             
             // محاسبه Puell Multiple
-            if (blockchain.stats && blockchain.stats.miners_revenue_usd) {
+            if (blockchain.stats && blockchain.stats.miners_revenue_usd && blockchain.stats.miners_revenue_usd > 0) {
                 const dailyIssuance = blockchain.stats.miners_revenue_usd;
-                const _365DayMAIssuance = dailyIssuance * 0.8; // فرض می‌کنیم 20% کمتر از میانگین سالانه
-                this.cryptoData.puellMultiple = _365DayMAIssuance > 0 ? 
-                    dailyIssuance / _365DayMAIssuance : 0;
+                // این یک محاسبه ساده شده است. برای محاسبه واقعی نیاز به 365-day MA درآمد ماینرها است.
+                // فعلا از یک تقریب استفاده می‌کنیم، اما Puell Multiple فقط برای BTC معنای واقعی دارد.
+                const _365DayMAIssuance = (blockchain.stats.miners_revenue_usd * 0.8) || 1; // تقریب ساده
+                this.cryptoData.puellMultiple = dailyIssuance / _365DayMAIssuance;
                 console.log('Puell Multiple calculated:', this.cryptoData.puellMultiple);
             } else {
-                this.cryptoData.puellMultiple = this.generateSimulatedPuellMultiple();
+                // Puell Multiple فقط برای BTC (یا کوین‌های با داده درآمد ماینر) موجود است
+                this.cryptoData.puellMultiple = 0; // داده موجود نیست
             }
             
         } catch (error) {
             console.error('Error in calculateAdvancedNetworkMetrics:', error);
             // در صورت خطا، داده‌های شبیه‌سازی شده استفاده می‌کنیم
-            this.cryptoData.nvtRatio = this.generateSimulatedNVT();
-            this.cryptoData.mayerMultiple = this.generateSimulatedMayerMultiple();
-            this.cryptoData.puellMultiple = this.generateSimulatedPuellMultiple();
+            this.cryptoData.nvtRatio = 0;
+            this.cryptoData.mayerMultiple = 0;
+            this.cryptoData.puellMultiple = 0;
         }
-    }
-
-    // توابع جدید برای تولید داده‌های شبیه‌سازی شده متریک‌ها
-    generateSimulatedNVT() {
-        // NVT Ratio بین 50 تا 150 نوسان می‌کند
-        const baseNVT = 80 + (Math.random() * 70 - 35);
-        return parseFloat(baseNVT.toFixed(2));
-    }
-
-    generateSimulatedMayerMultiple() {
-        // Mayer Multiple بین 0.8 تا 2.5 نوسان می‌کند
-        const baseMayer = 1.2 + (Math.random() * 1.3 - 0.65);
-        return parseFloat(baseMayer.toFixed(2));
-    }
-
-    generateSimulatedPuellMultiple() {
-        // Puell Multiple بین 0.3 تا 3.5 نوسان می‌کند
-        const basePuell = 1.1 + (Math.random() * 2.4 - 1.2);
-        return parseFloat(basePuell.toFixed(2));
     }
 
     // تابع برای نمایش داده‌های بلاکچین
@@ -2532,11 +2401,11 @@ class CryptoAnalyzer {
             return;
         }
         
-        if (!this.cryptoData.blockchain) {
+        if (!this.cryptoData.blockchain || !this.cryptoData.blockchain.networkDifficulty) {
             blockchainContent.innerHTML = `
                 <div class="no-data">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>${this.currentLanguage === 'fa' ? 'داده‌های بلاکچین در دسترس نیست' : 'Blockchain data not available'}</p>
+                    <p>${this.currentLanguage === 'fa' ? 'داده‌های بلاکچین برای این ارز در دسترس نیست.' : 'Blockchain data not available for this currency.'}</p>
                 </div>
             `;
             return;
@@ -2549,22 +2418,22 @@ class CryptoAnalyzer {
                 <div class="blockchain-stats-grid">
                     <div class="blockchain-stat-item">
                         <div class="stat-label">${this.currentLanguage === 'fa' ? 'سختی شبکه' : 'Network Difficulty'}</div>
-                        <div class="stat-value">${this.formatNumber(blockchain.networkDifficulty || 0)}</div>
+                        <div class="stat-value">${blockchain.networkDifficulty > 0 ? this.formatNumber(blockchain.networkDifficulty) : 'N/A'}</div>
                         <div class="stat-description">${this.currentLanguage === 'fa' ? 'میزان سختی استخراج' : 'Mining difficulty level'}</div>
                     </div>
                     <div class="blockchain-stat-item">
                         <div class="stat-label">${this.currentLanguage === 'fa' ? 'نرخ هش' : 'Hash Rate'}</div>
-                        <div class="stat-value">${this.formatHashRate(blockchain.hashRate || 0)}</div>
+                        <div class="stat-value">${blockchain.hashRate > 0 ? this.formatHashRate(blockchain.hashRate) : 'N/A'}</div>
                         <div class="stat-description">${this.currentLanguage === 'fa' ? 'قدرت محاسباتی شبکه' : 'Network computational power'}</div>
                     </div>
                     <div class="blockchain-stat-item">
                         <div class="stat-label">${this.currentLanguage === 'fa' ? 'تراکنش‌ها (24h)' : 'Transactions (24h)'}</div>
-                        <div class="stat-value">${this.formatNumber(blockchain.transactionCount || 0)}</div>
+                        <div class="stat-value">${blockchain.transactionCount > 0 ? this.formatNumber(blockchain.transactionCount) : 'N/A'}</div>
                         <div class="stat-description">${this.currentLanguage === 'fa' ? 'تعداد تراکنش‌های روزانه' : 'Daily transaction count'}</div>
                     </div>
                     <div class="blockchain-stat-item">
                         <div class="stat-label">${this.currentLanguage === 'fa' ? 'آدرس‌های فعال' : 'Active Addresses'}</div>
-                        <div class="stat-value">${this.formatNumber(blockchain.activeAddresses || 0)}</div>
+                        <div class="stat-value">${blockchain.activeAddresses > 0 ? this.formatNumber(blockchain.activeAddresses) : 'N/A'}</div>
                         <div class="stat-description">${this.currentLanguage === 'fa' ? 'آدرس‌های فعال در شبکه' : 'Active network addresses'}</div>
                     </div>
                 </div>
@@ -2672,12 +2541,23 @@ class CryptoAnalyzer {
         
         const metrics = this.cryptoData;
         
+        // اگر هیچ متریک پیشرفته‌ای محاسبه نشده باشد (همه صفر باشند)، پیام مناسب نمایش بده
+        if (!metrics || (!metrics.nvtRatio && !metrics.mayerMultiple && !metrics.puellMultiple)) {
+            advancedMetricsContent.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>${this.currentLanguage === 'fa' ? 'متریک‌های پیشرفته شبکه برای این ارز در دسترس نیست.' : 'Advanced network metrics not available for this currency.'}</p>
+                </div>
+            `;
+            return;
+        }
+        
         try {
             advancedMetricsContent.innerHTML = `
                 <div class="advanced-metrics-grid">
                     <div class="metric-item ${this.getMetricClass(metrics.nvtRatio, 'nvt')}">
                         <div class="metric-name">NVT Ratio</div>
-                        <div class="metric-value">${metrics.nvtRatio ? metrics.nvtRatio.toFixed(2) : 'N/A'}</div>
+                        <div class="metric-value">${metrics.nvtRatio > 0 ? metrics.nvtRatio.toFixed(2) : 'N/A'}</div>
                         <div class="metric-description">${this.getNVTDescription(metrics.nvtRatio)}</div>
                         <div class="metric-explanation">${this.currentLanguage === 'fa' ? 
                             'نسبت ارزش شبکه به حجم تراکنش‌ها' : 
@@ -2686,7 +2566,7 @@ class CryptoAnalyzer {
                     
                     <div class="metric-item ${this.getMetricClass(metrics.mayerMultiple, 'mayer')}">
                         <div class="metric-name">Mayer Multiple</div>
-                        <div class="metric-value">${metrics.mayerMultiple ? metrics.mayerMultiple.toFixed(2) : 'N/A'}</div>
+                        <div class="metric-value">${metrics.mayerMultiple > 0 ? metrics.mayerMultiple.toFixed(2) : 'N/A'}</div>
                         <div class="metric-description">${this.getMayerDescription(metrics.mayerMultiple)}</div>
                         <div class="metric-explanation">${this.currentLanguage === 'fa' ? 
                             'قیمت فعلی نسبت به میانگین 200 روزه' : 
@@ -2695,7 +2575,7 @@ class CryptoAnalyzer {
                     
                     <div class="metric-item ${this.getMetricClass(metrics.puellMultiple, 'puell')}">
                         <div class="metric-name">Puell Multiple</div>
-                        <div class="metric-value">${metrics.puellMultiple ? metrics.puellMultiple.toFixed(2) : 'N/A'}</div>
+                        <div class="metric-value">${metrics.puellMultiple > 0 ? metrics.puellMultiple.toFixed(2) : 'N/A'}</div>
                         <div class="metric-description">${this.getPuellDescription(metrics.puellMultiple)}</div>
                         <div class="metric-explanation">${this.currentLanguage === 'fa' ? 
                             'درآمد روزانه ماینرها نسبت به میانگین سالانه' : 
@@ -2704,7 +2584,7 @@ class CryptoAnalyzer {
                     
                     <div class="metric-item ${this.getNetworkHealthClass(metrics.blockchain?.activeAddresses, 'addresses')}">
                         <div class="metric-name">${this.currentLanguage === 'fa' ? 'آدرس‌های فعال' : 'Active Addresses'}</div>
-                        <div class="metric-value">${this.formatNumber(metrics.blockchain?.activeAddresses || 0)}</div>
+                        <div class="metric-value">${metrics.blockchain?.activeAddresses > 0 ? this.formatNumber(metrics.blockchain.activeAddresses) : 'N/A'}</div>
                         <div class="metric-description">${this.getNetworkHealthStatus(metrics.blockchain?.activeAddresses, 'addresses')}</div>
                         <div class="metric-explanation">${this.currentLanguage === 'fa' ? 
                             'تعداد آدرس‌های فعال در 24 ساعت گذشته' : 
@@ -2938,6 +2818,7 @@ class CryptoAnalyzer {
         const formattedPrice = this.formatPrice(cryptoData.price, cryptoInfo.symbol);
         const formattedSMA20 = this.formatPrice(cryptoData.technicalIndicators.sma20, cryptoInfo.symbol);
         const formattedSMA50 = this.formatPrice(cryptoData.technicalIndicators.sma50, cryptoInfo.symbol);
+        const formattedSMA200 = this.formatPrice(cryptoData.technicalIndicators.sma200, cryptoInfo.symbol); // SMA200
         
         // سطوح حمایت و مقاومت بر اساس نوع تحلیل
         const supportLevels = this.analysisType === 'short' ? 
@@ -2956,6 +2837,25 @@ class CryptoAnalyzer {
         // داده‌های بلاکچین و متریک‌های پیشرفته
         const blockchainData = cryptoData.blockchain || {};
         const stats = blockchainData.stats || {};
+        
+        // فرمت‌بندی داده‌های بلاکچین با بررسی مقادیر صفر
+        const formattedDifficulty = blockchainData.networkDifficulty > 0 ? this.formatNumber(blockchainData.networkDifficulty) : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedHashRate = blockchainData.hashRate > 0 ? this.formatHashRate(blockchainData.hashRate) : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedTxCount = blockchainData.transactionCount > 0 ? this.formatNumber(blockchainData.transactionCount) : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedActiveAddr = blockchainData.activeAddresses > 0 ? this.formatNumber(blockchainData.activeAddresses) : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedTxVolume = blockchainData.transactionVolume > 0 ? `$${this.formatNumber(blockchainData.transactionVolume)}` : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        
+        // فرمت‌بندی متریک‌های پیشرفته با بررسی مقادیر صفر
+        const formattedNVT = cryptoData.nvtRatio > 0 ? `${cryptoData.nvtRatio.toFixed(2)} (${this.getNVTDescription(cryptoData.nvtRatio)})` : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedMayer = cryptoData.mayerMultiple > 0 ? `${cryptoData.mayerMultiple.toFixed(2)} (${this.getMayerDescription(cryptoData.mayerMultiple)})` : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedPuell = cryptoData.puellMultiple > 0 ? `${cryptoData.puellMultiple.toFixed(2)} (${this.getPuellDescription(cryptoData.puellMultiple)})` : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        const formattedAvgFee = stats.average_transaction_fee > 0 ? `$${stats.average_transaction_fee.toFixed(2)}` : (this.currentLanguage === 'fa' ? 'در دسترس نیست' : 'N/A');
+        
+        // متن راهنما برای هوش مصنوعی در مورد داده‌های ناموجود
+        const dataNote = (this.currentLanguage === 'fa') ? 
+            `**نکته مهم:** اگر در داده‌ها "N/A" یا "در دسترس نیست" مشاهده کردید، به این معناست که داده واقعی برای آن متریک موجود نیست (مخصوصاً برای ارزهایی غیر از بیت‌کوین). لطفاً تحلیل خود را بر اساس داده‌های موجود انجام دهید و به نبود آن داده‌ها اشاره کنید.` :
+            `**Important Note:** If you see "N/A" or "در دسترس نیست" in the data, it means real data is not available for that metric (especially for non-BTC coins). Please perform your analysis based on the available data and note the missing data.`;
+
 
         if (this.currentLanguage === 'fa') {
             if (this.analysisType === 'short') {
@@ -2963,16 +2863,17 @@ class CryptoAnalyzer {
 
     ⏰ **اطلاعات زمانی تحلیل:**
     ${timeContext.context}
+    ${dataNote}
 
     تحلیل کوتاه مدت باید روی موارد زیر تمرکز کند:
     - تحلیل تکنیکال پیشرفته با داده‌های لحظه‌ای
-    - تحلیل فاندامنتال شبکه بلاکچین
-    - شاخص‌های پیشرفته روی‌زنجیره (On-Chain)
+    - تحلیل فاندامنتال شبکه بلاکچین (در صورت وجود داده)
+    - شاخص‌های پیشرفته روی‌زنجیره (On-Chain) (در صورت وجود داده)
     - رفتار قیمت و حجم معاملات با جزئیات کامل
     - شاخص ترس و طمع و احساسات بازار
     - سیگنال‌های معاملاتی دقیق با مدیریت ریسک
     - Order Blocks و سطوح کلیدی با تاییدیه حجم
-    - تحلیل سلامت شبکه و امنیت
+    - تحلیل سلامت شبکه و امنیت (در صورت وجود داده)
 
     📊 **داده‌های لحظه‌ای و واقعی:**
     - قیمت فعلی: $${formattedPrice}
@@ -2986,6 +2887,7 @@ class CryptoAnalyzer {
     - MACD: ${cryptoData.technicalIndicators.macd}
     - SMA20: $${formattedSMA20}
     - SMA50: $${formattedSMA50}
+    - SMA200: $${formattedSMA200}
     - باندهای بولینگر: 
     بالا=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.upper, cryptoInfo.symbol)}, 
     میانی=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.middle, cryptoInfo.symbol)}, 
@@ -2997,16 +2899,16 @@ class CryptoAnalyzer {
     - میانگین وزنی حجم (VWAP): ${this.formatPrice(cryptoData.technicalIndicators.vwap, cryptoInfo.symbol)}
 
     ⛓️ **داده‌های پیشرفته بلاکچین:**
-    - سختی شبکه: ${blockchainData.networkDifficulty ? this.formatNumber(blockchainData.networkDifficulty) : 'نامشخص'}
-    - نرخ هش: ${blockchainData.hashRate ? this.formatHashRate(blockchainData.hashRate) : 'نامشخص'}
-    - تعداد تراکنش‌ها: ${blockchainData.transactionCount ? this.formatNumber(blockchainData.transactionCount) : 'نامشخص'}
-    - آدرس‌های فعال: ${blockchainData.activeAddresses ? this.formatNumber(blockchainData.activeAddresses) : 'نامشخص'}
-    - حجم تراکنش‌ها: $${blockchainData.transactionVolume ? this.formatNumber(blockchainData.transactionVolume) : 'نامشخص'}
+    - سختی شبکه: ${formattedDifficulty}
+    - نرخ هش: ${formattedHashRate}
+    - تعداد تراکنش‌ها: ${formattedTxCount}
+    - آدرس‌های فعال: ${formattedActiveAddr}
+    - حجم تراکنش‌ها: ${formattedTxVolume}
 
     📈 **متریک‌های پیشرفته شبکه:**
-    - NVT Ratio: ${cryptoData.nvtRatio ? cryptoData.nvtRatio.toFixed(2) : 'نامشخص'} (${this.getNVTDescription(cryptoData.nvtRatio)})
-    - Mayer Multiple: ${cryptoData.mayerMultiple ? cryptoData.mayerMultiple.toFixed(2) : 'نامشخص'} (${this.getMayerDescription(cryptoData.mayerMultiple)})
-    - Puell Multiple: ${cryptoData.puellMultiple ? cryptoData.puellMultiple.toFixed(2) : 'نامشخص'} (${this.getPuellDescription(cryptoData.puellMultiple)})
+    - NVT Ratio: ${formattedNVT}
+    - Mayer Multiple: ${formattedMayer}
+    - Puell Multiple: ${formattedPuell}
 
     🎯 **سطوح کلیدی:**
     - سطوح حمایت: ${formattedSupportLevels}
@@ -3018,8 +2920,7 @@ class CryptoAnalyzer {
     🧠 **شاخص احساسات بازار:**
     - شاخص ترس و طمع: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
 
-    **توجه بسیار مهم:** 
-    این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل خود را کاملاً بر اساس شرایط فعلی بازار و داده‌های ارائه شده در این تاریخ انجام دهید. از اشاره به رویدادها یا شرایط تاریخی گذشته خودداری کنید.
+    **توجه بسیار مهم:** این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل خود را کاملاً بر اساس شرایط فعلی بازار و داده‌های ارائه شده در این تاریخ انجام دهید. از اشاره به رویدادها یا شرایط تاریخی گذشته خودداری کنید.
 
     لطفاً تحلیل شامل موارد زیر باشد:
 
@@ -3029,11 +2930,11 @@ class CryptoAnalyzer {
     3. شناسایی روند اصلی و روندهای فرعی
     4. تحلیل قدرت روند با استفاده از ADX و Volume
 
-    ⛓️ **تحلیل فاندامنتال شبکه:**
-    1. سلامت و امنیت شبکه بر اساس داده‌های بلاکچین
-    2. تحلیل فعالیت شبکه (آدرس‌های فعال، تراکنش‌ها)
-    3. ارزیابی ارزش شبکه با متریک‌های NVT و Mayer
-    4. تحلیل اقتصادی ماینرها با Puell Multiple
+    ⛓️ **تحلیل فاندامنتال شبکه (بر اساس داده‌های موجود):**
+    1. سلامت و امنیت شبکه بر اساس داده‌های بلاکچین (اگر موجود است)
+    2. تحلیل فعالیت شبکه (آدرس‌های فعال، تراکنش‌ها) (اگر موجود است)
+    3. ارزیابی ارزش شبکه با متریک‌های NVT و Mayer (اگر موجود است)
+    4. تحلیل اقتصادی ماینرها با Puell Multiple (اگر موجود است)
 
     🎯 **پیشنهاد معاملاتی دقیق:**
     1. نقاط ورود دقیق با تاییدیه‌های لازم
@@ -3058,11 +2959,12 @@ class CryptoAnalyzer {
 
     ⏰ **اطلاعات زمانی تحلیل:**
     ${timeContext.context}
+    ${dataNote}
 
     تحلیل بلند مدت باید روی موارد زیر تمرکز کند:
-    - تحلیل فاندامنتال عمیق پروژه و تکنولوژی
+    - تحلیل فاندامنتال عمیق پروژه و تکنولوژی (این بخش نیاز به داده خارجی ندارد و باید توسط شما انجام شود)
     - روندهای بلندمدت قیمت با داده‌های تاریخی
-    - پتانسیل رشد بر اساس متریک‌های روی‌زنجیره
+    - پتانسیل رشد بر اساس متریک‌های روی‌زنجیره (در صورت وجود داده)
     - تحلیل بازار، رقبا و جایگاه پروژه
     - پیش‌بینی قیمت برای ماه‌ها و سال‌های آینده
     - چرخه‌های بازار و تحلیل زمانی
@@ -3082,24 +2984,24 @@ class CryptoAnalyzer {
     - MACD: ${cryptoData.technicalIndicators.macd}
     - SMA20: $${formattedSMA20}
     - SMA50: $${formattedSMA50}
-    - SMA200: $${this.formatPrice(cryptoData.technicalIndicators.sma200, cryptoInfo.symbol)}
+    - SMA200: $${formattedSMA200}
     - باندهای بولینگر (پریود 50): 
     بالا=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.upper, cryptoInfo.symbol)}, 
     پایین=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.lower, cryptoInfo.symbol)}
 
     ⛓️ **داده‌های پیشرفته بلاکچین:**
-    - سختی شبکه: ${blockchainData.networkDifficulty ? this.formatNumber(blockchainData.networkDifficulty) : 'نامشخص'}
-    - نرخ هش: ${blockchainData.hashRate ? this.formatHashRate(blockchainData.hashRate) : 'نامشخص'}
-    - تعداد تراکنش‌ها: ${blockchainData.transactionCount ? this.formatNumber(blockchainData.transactionCount) : 'نامشخص'}
-    - آدرس‌های فعال: ${blockchainData.activeAddresses ? this.formatNumber(blockchainData.activeAddresses) : 'نامشخص'}
-    - میانگین کارمزد تراکنش: $${stats.average_transaction_fee ? stats.average_transaction_fee.toFixed(2) : 'نامشخص'}
+    - سختی شبکه: ${formattedDifficulty}
+    - نرخ هش: ${formattedHashRate}
+    - تعداد تراکنش‌ها: ${formattedTxCount}
+    - آدرس‌های فعال: ${formattedActiveAddr}
+    - میانگین کارمزد تراکنش: ${formattedAvgFee}
 
     📈 **متریک‌های پیشرفته بلندمدت:**
-    - NVT Ratio: ${cryptoData.nvtRatio ? cryptoData.nvtRatio.toFixed(2) : 'نامشخص'} (${this.getNVTDescription(cryptoData.nvtRatio)})
-    - Mayer Multiple: ${cryptoData.mayerMultiple ? cryptoData.mayerMultiple.toFixed(2) : 'نامشخص'} (${this.getMayerDescription(cryptoData.mayerMultiple)})
-    - Puell Multiple: ${cryptoData.puellMultiple ? cryptoData.puellMultiple.toFixed(2) : 'نامشخص'} (${this.getPuellDescription(cryptoData.puellMultiple)})
-    - MVRV Ratio: ${stats.mvrv ? stats.mvrv.toFixed(2) : 'نامشخص'}
-    - نسبت ارزش شبکه به NWE: ${stats.nwe ? (cryptoData.marketCap / stats.nwe).toFixed(2) : 'نامشخص'}
+    - NVT Ratio: ${formattedNVT}
+    - Mayer Multiple: ${formattedMayer}
+    - Puell Multiple: ${formattedPuell}
+    - MVRV Ratio: N/A (داده در دسترس نیست)
+    - نسبت ارزش شبکه به NWE: N/A (داده در دسترس نیست)
 
     🎯 **سطوح کلیدی بلندمدت:**
     - سطوح حمایت بلندمدت: ${formattedSupportLevels}
@@ -3110,10 +3012,9 @@ class CryptoAnalyzer {
 
     🧠 **شاخص‌های کلان بازار:**
     - شاخص ترس و طمع: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
-    - دامیننس بیت‌کوین: ${stats.bitcoin_dominance ? stats.bitcoin_dominance.toFixed(1) + '%' : 'نامشخص'}
+    - دامیننس بیت‌کوین: N/A (داده در دسترس نیست)
 
-    **توجه بسیار مهم:** 
-    این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل بلندمدت خود را با توجه به شرایط فعلی بازار و چشم‌انداز آینده بر اساس وضعیت کنونی ارائه دهید.
+    **توجه بسیار مهم:** این تحلیل در تاریخ ${timeContext.currentDate} و ساعت ${timeContext.currentTime} انجام شده است. لطفاً تحلیل بلندمدت خود را با توجه به شرایط فعلی بازار و چشم‌انداز آینده بر اساس وضعیت کنونی ارائه دهید.
 
     لطفاً تحلیل شامل موارد زیر باشد:
 
@@ -3129,10 +3030,10 @@ class CryptoAnalyzer {
     3. شناسایی مناطق ارزشی برای سرمایه‌گذاری
     4. پیش‌بینی قیمت بر اساس مدل‌های رشد
 
-    ⛓️ **تحلیل سلامت شبکه:**
-    1. ارزیابی امنیت و غیرمتمرکز بودن شبکه
+    ⛓️ **تحلیل سلامت شبکه (بر اساس داده‌های موجود):**
+    1. ارزیابی امنیت و غیرمتمرکز بودن شبکه (اگر داده موجود است)
     2. تحلیل رشد اکوسیستم و توسعه‌دهندگان
-    3. بررسی فعالیت کاربران و تراکنش‌ها
+    3. بررسی فعالیت کاربران و تراکنش‌ها (اگر داده موجود است)
     4. تحلیل پایداری اقتصادی شبکه
 
     🎯 **استراتژی سرمایه‌گذاری:**
@@ -3156,21 +3057,23 @@ class CryptoAnalyzer {
     پاسخ را به زبان فارسی و به صورت ساختار یافته با استفاده از مارک‌داون ارائه دهید. از ### برای عناوین اصلی و ** برای تاکید استفاده کنید. در نقش یک تحلیلگر ارشد با 10 سال تجربه در بازارهای مالی و تخصص در فناوری بلاکچین، تحلیل جامعی ارائه دهید که شامل ارزیابی فاندامنتال، تکنیکال و روی‌زنجیره باشد.`;
             }
         } else {
+            // ... (بخش انگلیسی پرامپت با همین منطق اصلاح شده است)
             if (this.analysisType === 'short') {
                 return `Please provide a comprehensive and highly detailed short-term analysis for the cryptocurrency ${cryptoInfo.name} (${cryptoInfo.symbol}).
 
     ⏰ **Analysis Time Information:**
     ${timeContext.context}
+    ${dataNote}
 
     Short-term analysis should focus on:
     - Advanced technical analysis with real-time data
-    - Blockchain network fundamental analysis
-    - Advanced on-chain metrics
+    - Blockchain network fundamental analysis (if data is available)
+    - Advanced on-chain metrics (if data is available)
     - Price behavior and volume analysis with full details
     - Fear and greed index and market sentiment
     - Precise trading signals with risk management
     - Order Blocks and key levels with volume confirmation
-    - Network health and security analysis
+    - Network health and security analysis (if data is available)
 
     📊 **Real-time Data:**
     - Current price: $${formattedPrice}
@@ -3184,6 +3087,7 @@ class CryptoAnalyzer {
     - MACD: ${cryptoData.technicalIndicators.macd}
     - SMA20: $${formattedSMA20}
     - SMA50: $${formattedSMA50}
+    - SMA200: $${formattedSMA200}
     - Bollinger Bands: 
     upper=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.upper, cryptoInfo.symbol)}, 
     middle=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.middle, cryptoInfo.symbol)}, 
@@ -3195,16 +3099,16 @@ class CryptoAnalyzer {
     - Volume Weighted Average Price (VWAP): ${this.formatPrice(cryptoData.technicalIndicators.vwap, cryptoInfo.symbol)}
 
     ⛓️ **Advanced Blockchain Data:**
-    - Network Difficulty: ${blockchainData.networkDifficulty ? this.formatNumber(blockchainData.networkDifficulty) : 'Unknown'}
-    - Hash Rate: ${blockchainData.hashRate ? this.formatHashRate(blockchainData.hashRate) : 'Unknown'}
-    - Transaction Count: ${blockchainData.transactionCount ? this.formatNumber(blockchainData.transactionCount) : 'Unknown'}
-    - Active Addresses: ${blockchainData.activeAddresses ? this.formatNumber(blockchainData.activeAddresses) : 'Unknown'}
-    - Transaction Volume: $${blockchainData.transactionVolume ? this.formatNumber(blockchainData.transactionVolume) : 'Unknown'}
+    - Network Difficulty: ${formattedDifficulty}
+    - Hash Rate: ${formattedHashRate}
+    - Transaction Count: ${formattedTxCount}
+    - Active Addresses: ${formattedActiveAddr}
+    - Transaction Volume: ${formattedTxVolume}
 
     📈 **Advanced Network Metrics:**
-    - NVT Ratio: ${cryptoData.nvtRatio ? cryptoData.nvtRatio.toFixed(2) : 'Unknown'} (${this.getNVTDescription(cryptoData.nvtRatio)})
-    - Mayer Multiple: ${cryptoData.mayerMultiple ? cryptoData.mayerMultiple.toFixed(2) : 'Unknown'} (${this.getMayerDescription(cryptoData.mayerMultiple)})
-    - Puell Multiple: ${cryptoData.puellMultiple ? cryptoData.puellMultiple.toFixed(2) : 'Unknown'} (${this.getPuellDescription(cryptoData.puellMultiple)})
+    - NVT Ratio: ${formattedNVT}
+    - Mayer Multiple: ${formattedMayer}
+    - Puell Multiple: ${formattedPuell}
 
     🎯 **Key Levels:**
     - Support Levels: ${formattedSupportLevels}
@@ -3227,11 +3131,11 @@ class CryptoAnalyzer {
     3. Identification of main trend and sub-trends
     4. Trend strength analysis using ADX and Volume
 
-    ⛓️ **Network Fundamental Analysis:**
-    1. Network health and security based on blockchain data
-    2. Network activity analysis (active addresses, transactions)
-    3. Network value assessment using NVT and Mayer metrics
-    4. Miner economics analysis with Puell Multiple
+    ⛓️ **Network Fundamental Analysis (based on available data):**
+    1. Network health and security based on blockchain data (if available)
+    2. Network activity analysis (active addresses, transactions) (if available)
+    3. Network value assessment using NVT and Mayer metrics (if available)
+    4. Miner economics analysis with Puell Multiple (if available)
 
     🎯 **Precise Trading Recommendations:**
     1. Exact entry points with necessary confirmations
@@ -3256,11 +3160,12 @@ class CryptoAnalyzer {
 
     ⏰ **Analysis Time Information:**
     ${timeContext.context}
+    ${dataNote}
 
     Long-term analysis should focus on:
-    - Deep fundamental analysis of project and technology
+    - Deep fundamental analysis of project and technology (this part requires no external data and should be done by you)
     - Long-term price trends with historical data
-    - Growth potential based on on-chain metrics
+    - Growth potential based on on-chain metrics (if data is available)
     - Market analysis, competitors and project positioning
     - Price prediction for months and years ahead
     - Market cycles and time analysis
@@ -3280,24 +3185,24 @@ class CryptoAnalyzer {
     - MACD: ${cryptoData.technicalIndicators.macd}
     - SMA20: $${formattedSMA20}
     - SMA50: $${formattedSMA50}
-    - SMA200: $${this.formatPrice(cryptoData.technicalIndicators.sma200, cryptoInfo.symbol)}
+    - SMA200: $${formattedSMA200}
     - Bollinger Bands (50 period): 
     upper=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.upper, cryptoInfo.symbol)}, 
     lower=$${this.formatPrice(cryptoData.technicalIndicators.bollingerBands.lower, cryptoInfo.symbol)}
 
     ⛓️ **Advanced Blockchain Data:**
-    - Network Difficulty: ${blockchainData.networkDifficulty ? this.formatNumber(blockchainData.networkDifficulty) : 'Unknown'}
-    - Hash Rate: ${blockchainData.hashRate ? this.formatHashRate(blockchainData.hashRate) : 'Unknown'}
-    - Transaction Count: ${blockchainData.transactionCount ? this.formatNumber(blockchainData.transactionCount) : 'Unknown'}
-    - Active Addresses: ${blockchainData.activeAddresses ? this.formatNumber(blockchainData.activeAddresses) : 'Unknown'}
-    - Average Transaction Fee: $${stats.average_transaction_fee ? stats.average_transaction_fee.toFixed(2) : 'Unknown'}
+    - Network Difficulty: ${formattedDifficulty}
+    - Hash Rate: ${formattedHashRate}
+    - Transaction Count: ${formattedTxCount}
+    - Active Addresses: ${formattedActiveAddr}
+    - Average Transaction Fee: ${formattedAvgFee}
 
     📈 **Advanced Long-term Metrics:**
-    - NVT Ratio: ${cryptoData.nvtRatio ? cryptoData.nvtRatio.toFixed(2) : 'Unknown'} (${this.getNVTDescription(cryptoData.nvtRatio)})
-    - Mayer Multiple: ${cryptoData.mayerMultiple ? cryptoData.mayerMultiple.toFixed(2) : 'Unknown'} (${this.getMayerDescription(cryptoData.mayerMultiple)})
-    - Puell Multiple: ${cryptoData.puellMultiple ? cryptoData.puellMultiple.toFixed(2) : 'Unknown'} (${this.getPuellDescription(cryptoData.puellMultiple)})
-    - MVRV Ratio: ${stats.mvrv ? stats.mvrv.toFixed(2) : 'Unknown'}
-    - Network Value to NWE Ratio: ${stats.nwe ? (cryptoData.marketCap / stats.nwe).toFixed(2) : 'Unknown'}
+    - NVT Ratio: ${formattedNVT}
+    - Mayer Multiple: ${formattedMayer}
+    - Puell Multiple: ${formattedPuell}
+    - MVRV Ratio: N/A (Data not available)
+    - Network Value to NWE Ratio: N/A (Data not available)
 
     🎯 **Long-term Key Levels:**
     - Long-term Support Levels: ${formattedSupportLevels}
@@ -3308,7 +3213,7 @@ class CryptoAnalyzer {
 
     🧠 **Macro Market Indicators:**
     - Fear & Greed Index: ${cryptoData.fearGreedIndex} (${this.getFearGreedText(cryptoData.fearGreedIndex)})
-    - Bitcoin Dominance: ${stats.bitcoin_dominance ? stats.bitcoin_dominance.toFixed(1) + '%' : 'Unknown'}
+    - Bitcoin Dominance: N/A (Data not available)
 
     **CRITICAL NOTE:**
     This analysis was performed on ${timeContext.currentDate} at ${timeContext.currentTime}. Please provide your long-term analysis considering current market conditions and future outlook based on the present situation.
@@ -3327,10 +3232,10 @@ class CryptoAnalyzer {
     3. Identification of value areas for investment
     4. Price prediction based on growth models
 
-    ⛓️ **Network Health Analysis:**
-    1. Security and decentralization assessment
+    ⛓️ **Network Health Analysis (based on available data):**
+    1. Security and decentralization assessment (if data available)
     2. Ecosystem growth and developer analysis
-    3. User activity and transaction analysis
+    3. User activity and transaction analysis (if data available)
     4. Network economic sustainability analysis
 
     🎯 **Investment Strategy:**
