@@ -1774,6 +1774,250 @@ body[dir="ltr"] .advanced-metrics-card {
     }
 }
 
+/* استایل مقایسه قیمت */
+.price-comparison-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 25px;
+    margin: 20px 0;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.price-comparison-card h3 {
+    color: #fff;
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.exchange-price {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.exchange-price:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.exchange-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: #fff;
+    font-weight: 600;
+}
+
+.exchange-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+
+.price-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+}
+
+.arbitrage-opportunity {
+    grid-column: 1 / -1;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    text-align: center;
+}
+
+.arb-title {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.arb-value {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.diff-amount {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.diff-percent {
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.diff-percent.green {
+    color: #4ade80;
+}
+
+.diff-percent.red {
+    color: #f87171;
+}
+
+.arb-note {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.95rem;
+    margin-top: 10px;
+}
+
+/* استایل دفترچه سفارشات */
+.orderbook-card {
+    background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+    border-radius: 20px;
+    padding: 25px;
+    margin: 20px 0;
+    box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
+}
+
+.orderbook-card h3 {
+    color: #fff;
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.orderbook-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.orderbook-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.section-title.sell {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+}
+
+.section-title.buy {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+}
+
+.orderbook-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.orderbook-table thead th {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 8px;
+    text-align: right;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.orderbook-table tbody td {
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    text-align: right;
+    color: #fff;
+}
+
+.sell-price {
+    color: #f87171 !important;
+    font-weight: 600;
+}
+
+.buy-price {
+    color: #4ade80 !important;
+    font-weight: 600;
+}
+
+.quantity {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.sum {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85rem;
+}
+
+.ask-row:hover,
+.bid-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.spread-indicator {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.spread-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+
+.spread-value {
+    color: #fbbf24;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+/* حالت ریسپانسیو */
+@media (max-width: 768px) {
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .orderbook-container {
+        font-size: 0.85rem;
+    }
+    
+    .price-value {
+        font-size: 1.2rem;
+    }
+    
+    .diff-amount {
+        font-size: 1.4rem;
+    }
+}
+
 /* استایل‌های Select2 */
 .select2-container--default .select2-selection--single {
     height: 50px !important;

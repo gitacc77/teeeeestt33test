@@ -51,7 +51,7 @@ class CryptoAnalyzer {
                 'copyButton': 'کپی نتایج',
                 'downloadButton': 'دانلود PDF',
                 'shareButton': 'اشتراک گذاری',
-                'newsTitle': '📌 ترند های بازار کریپتو',
+                'newsTitle': '📌 اخبار بازار کریپتو',
                 'loadingNewsText': 'در حال دریافت آخرین ترندها...',
                 'blockchainTitle': '⛓️ داده‌های پیشرفته بلاکچین',
                 'advancedMetricsTitle': '📈 متریک‌های پیشرفته شبکه',
@@ -85,7 +85,7 @@ class CryptoAnalyzer {
                 'copyButton': 'Copy Results',
                 'downloadButton': 'Download PDF',
                 'shareButton': 'Share',
-                'newsTitle': '📌 Crypto Market Trends',
+                'newsTitle': '📌 Crypto Market News',
                 'loadingNewsText': 'Fetching latest Trends...',
                 'blockchainTitle': '⛓️ Advanced Blockchain Data',
                 'advancedMetricsTitle': '📈 Advanced Network Metrics',
@@ -437,8 +437,8 @@ class CryptoAnalyzer {
             // 🔄 مرحله 8: تحلیل هوشمند با AI
             this.updateStatus(
             this.currentLanguage === 'fa' ?
-            'در حال تحلیل هوشمند با AI... (حدودا ۱۲۰ ثانیه صبر کنید)':
-            'Performing AI analysis... (Wait about 120 seconds)');
+            'درحال تحلیل با AI...':
+            'Analyzing with AI...');
             
             const analysis = await this.performAIAnalysis();
             
@@ -694,6 +694,12 @@ class CryptoAnalyzer {
             mantle: { symbol: 'MNT', name: this.currentLanguage === 'fa' ? 'منتل' : 'Mantle', coingeckoId: 'mantle', coinpaprikaId: 'mnt-mantle', tradingViewSymbol: 'BYBIT:MNTUSDT' },
             kaspa: { symbol: 'KAS', name: this.currentLanguage === 'fa' ? 'کسپا' : 'Kaspa', coingeckoId: 'kaspa', coinpaprikaId: 'kas-kaspa', tradingViewSymbol: 'MEXC:KASUSDT' },
             'flare-networks': { symbol: 'FLR', name: this.currentLanguage === 'fa' ? 'فلر' : 'Flare', coingeckoId: 'flare-networks', coinpaprikaId: 'flr-flare-network', tradingViewSymbol: 'OKX:FLRUSDT' },
+            'gatechain-token': { symbol: 'GT', name: this.currentLanguage === 'fa' ? 'گیت توکن' : 'Gate', coingeckoId: 'gatechain-token', coinpaprikaId: 'gt-gatetoken', tradingViewSymbol: 'GATE:GTUSDT' },
+            'sun-token': { symbol: 'SUN', name: this.currentLanguage === 'fa' ? 'سان توکن' : 'Sun Token', coingeckoId: 'sun-token', coinpaprikaId: 'sun-sun', tradingViewSymbol: 'BINANCE:SUNUSDT' },
+            'gas': { symbol: 'GAS', name: this.currentLanguage === 'fa' ? 'گس' : 'Gas', coingeckoId: 'gas', coinpaprikaId: 'gas-gas', tradingViewSymbol: 'OKX:GASUSDT' },
+            'helium': { symbol: 'HNT', name: this.currentLanguage === 'fa' ? 'هلیوم' : 'Helium', coingeckoId: 'helium', coinpaprikaId: 'hnt-helium', tradingViewSymbol: 'POLONIEX:HNTUSDT' },
+            'coredaoorg': { symbol: 'CORE', name: this.currentLanguage === 'fa' ? 'کور' : 'Core', coingeckoId: 'coredaoorg', coinpaprikaId: 'core-core-dao', tradingViewSymbol: 'OKX:COREUSDT' },
+            'mocaverse': { symbol: 'MOCA', name: this.currentLanguage === 'fa' ? 'موکا' : 'Moca Network', coingeckoId: 'mocaverse', coinpaprikaId: 'moca-moca', tradingViewSymbol: 'KUCOIN:MOCAUSDT' },
             'alphabet-xstock': { symbol: 'GOOGLX', name: this.currentLanguage === 'fa' ? 'گوگل استاک' : 'Alphabet xStock', coingeckoId: 'alphabet-xstock', coinpaprikaId: 'googlx-alphabet-tokenized-stock-xstock', tradingViewSymbol: 'BYBIT:GOOGLXUSDT' },
             'nvidia-xstock': { symbol: 'NVDAX', name: this.currentLanguage === 'fa' ? 'انویدیا استاک' : 'NVIDIA xStock', coingeckoId: 'nvidia-xstock', coinpaprikaId: 'nvdax-nvidia-tokenized-stock-xstock', tradingViewSymbol: 'CRYPTO:NVDAXUSD' },
             'apple-xstock': { symbol: 'AAPLX', name: this.currentLanguage === 'fa' ? 'اپل استاک' : 'Apple xStock', coingeckoId: 'apple-xstock', coinpaprikaId: 'aaplx-apple-tokenized-stock-xstock', tradingViewSymbol: 'MEXC:AAPLXUSDT' },
@@ -712,75 +718,125 @@ class CryptoAnalyzer {
         console.log('Selected crypto info:', this.cryptoInfo);
     }
 
+    // 🔄 دریافت داده‌های لحظه‌ای (اصلاح شده با اولویت بایننس)
     async fetchRealTimeData() {
         try {
-            // ابتدا تلاش برای دریافت داده‌ها از CoinGecko API (همیشه در دسترس)
-            const geckoData = await this.fetchFromCoinGecko();
+            // سعی در دریافت از والکس (صرافی ایرانی)
+            try {
+                const wallexData = await this.fetchFromWallex();
+                this.cryptoData = {
+                    ...this.cryptoData,
+                    ...wallexData,
+                    wallexPrice: wallexData.price, // ذخیره جداگانه قیمت والکس
+                    wallexBidAsk: {
+                        bid: wallexData.bidPrice,
+                        ask: wallexData.askPrice
+                    }
+                };
+                console.log('✅ داده‌ها از والکس دریافت شد:', this.cryptoData);
+            } catch (wallexError) {
+                console.warn('⚠️ والکس در دسترس نیست، استفاده از منابع جهانی:', wallexError.message);
+            }
             
-            // سپس تلاش برای دریافت داده‌های تکمیلی از CoinPaprika (در صورت امکان)
+            // دریافت از Binance
+            try {
+                const binanceData = await this.fetchFromBinance();
+                this.cryptoData = {
+                    ...this.cryptoData,
+                    ...binanceData,
+                    binancePrice: binanceData.price // ذخیره جداگانه قیمت بایننس
+                };
+                this.cryptoData.historicalData = await this.fetchHistoricalDataFromBinance();
+                console.log('✅ داده‌ها از Binance دریافت شد');
+                return;
+            } catch (binanceError) {
+                console.warn('⚠️ Binance API خطا داد، تلاش با CoinGecko...', binanceError);
+            }
+            
+            // اگر Binance کار نکرد، از CoinGecko استفاده کن
+            try {
+                const geckoData = await this.fetchFromCoinGecko();
+                this.cryptoData = {
+                    ...this.cryptoData,
+                    ...geckoData
+                };
+                this.cryptoData.historicalData = await this.fetchHistoricalDataFromCoinGecko();
+                console.log('✅ داده‌ها از CoinGecko دریافت شد');
+                return;
+            } catch (geckoError) {
+                console.warn('⚠️ CoinGecko هم خطا داد:', geckoError);
+            }
+            
+            // در آخر CoinPaprika
             try {
                 const paprikaData = await this.fetchFromCoinPaprika();
-                
-                // ادغام داده‌ها
                 this.cryptoData = {
-                    ...geckoData,
-                    // اگر داده‌های CoinPaprika در دسترس بود، از آن‌ها استفاده کن
-                    exchangeData: paprikaData.exchangeData || geckoData.exchangeData,
-                    circulatingSupply: paprikaData.circulatingSupply || geckoData.circulatingSupply,
-                    maxSupply: paprikaData.maxSupply || geckoData.maxSupply,
+                    ...this.cryptoData,
+                    ...paprikaData
                 };
+                console.log('✅ داده‌ها از CoinPaprika دریافت شد');
+                return;
             } catch (paprikaError) {
-                console.warn('Could not fetch data from CoinPaprika, using CoinGecko data only:', paprikaError.message);
-                this.cryptoData = geckoData;
+                console.warn('❌ CoinPaprika هم کار نکرد:', paprikaError);
             }
-
-            console.log('Real-time data fetched:', this.cryptoData);
-
-        } catch (error) {
-            console.error('Error fetching real-time data:', error);
-            throw new Error('خطا در دریافت داده‌های لحظه‌ای');
-        }
-    }
-
-    // تابع جدید برای دریافت داده‌ها از CoinGecko
-    async fetchFromCoinGecko() {
-        try {
-            // دریافت داده‌های لحظه‌ای از CoinGecko API
-            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${this.cryptoInfo.coingeckoId}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`);
             
-            if (!response.ok) {
-                throw new Error('خطا در دریافت داده‌ها از CoinGecko');
-            }
-
-            const data = await response.json();
-            const cryptoData = data[this.cryptoInfo.coingeckoId];
-
-            if (!cryptoData) {
-                throw new Error('داده‌های ارز یافت نشد');
-            }
-
-            // دریافت داده‌های تاریخی برای محاسبات تکنیکال
-            const historicalData = await this.fetchHistoricalDataFromCoinGecko();
-
-            return {
-                symbol: this.cryptoInfo.symbol,
-                name: this.cryptoInfo.name,
-                price: cryptoData.usd,
-                priceChange24h: cryptoData.usd_24h_change || 0,
-                volume24h: cryptoData.usd_24h_vol || 0,
-                marketCap: cryptoData.usd_market_cap || 0,
-                historicalData: historicalData,
-                exchangeData: [], // CoinGecko این اطلاعات را ارائه نمی‌دهد
-                circulatingSupply: null, // نیاز به API جداگانه دارد
-                maxSupply: null, // نیاز به API جداگانه دارد
-                lastUpdated: Date.now()
-            };
-
+            throw new Error('همه منابع داده خطا دادند');
+            
         } catch (error) {
-            console.error('Error fetching from CoinGecko:', error);
-            throw error;
+            console.error('❌ خطا در دریافت داده:', error);
+            throw new Error(
+                this.currentLanguage === 'fa' 
+                    ? 'خطا در دریافت قیمت لحظه‌ای از تمام منابع' 
+                    : 'Error fetching real-time price from all sources'
+            );
         }
     }
+
+    // تابع جدید: دریافت از بایننس
+    async fetchFromBinance() {
+        // استخراج نماد بایننس از tradingViewSymbol (مثلاً BINANCE:BTCUSDT -> BTCUSDT)
+        let symbol = this.cryptoInfo.tradingViewSymbol.replace('BINANCE:', '').replace('USDT', 'USDT'); 
+        // اگر نماد USDT نداشت (برای اطمینان)
+        if (!symbol.endsWith('USDT') && !symbol.endsWith('USD')) {
+            symbol += 'USDT';
+        }
+
+        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+        if (!response.ok) throw new Error('Binance API Error');
+        
+        const data = await response.json();
+        
+        // دریافت تاریخچه برای محاسبه تغییرات دقیق‌تر اگر نیاز بود، اما تیکر 24 ساعته کافی است
+        return {
+            price: parseFloat(data.lastPrice),
+            priceChange24h: parseFloat(data.priceChangePercent),
+            volume24h: parseFloat(data.quoteVolume), // حجم به تتر
+            marketCap: null, // بایننس مارکت کپ را مستقیم نمی‌دهد، در صورت نیاز از کوین‌گکو پر می‌شود
+            high24h: parseFloat(data.highPrice),
+            low24h: parseFloat(data.lowPrice),
+            lastUpdated: Date.now()
+        };
+    }
+
+    // اصلاح شده: دریافت از کوین‌گکو بدون داده فیک
+    async fetchFromCoinGecko() {
+        const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${this.cryptoInfo.coingeckoId}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`);
+        if (!response.ok) throw new Error('CoinGecko API Error');
+        
+        const data = await response.json();
+        const coinData = data[this.cryptoInfo.coingeckoId];
+        
+        if (!coinData) throw new Error('Currency data not found in CoinGecko');
+
+        return {
+            price: coinData.usd,
+            priceChange24h: coinData.usd_24h_change,
+            volume24h: coinData.usd_24h_vol,
+            marketCap: coinData.usd_market_cap,
+            lastUpdated: Date.now()
+        };
+    }
+
 
     // تابع جدید برای دریافت داده‌ها از CoinPaprika (با مدیریت خطا)
     async fetchFromCoinPaprika() {
@@ -823,71 +879,144 @@ class CryptoAnalyzer {
         }
     }
 
-    // تابع جدید برای دریافت داده‌های تاریخی از CoinGecko
-    async fetchHistoricalDataFromCoinGecko() {
+    // دریافت داده از صرافی والکس (ایران)
+    async fetchFromWallex() {
         try {
-            // دریافت داده‌های تاریخی 365 روزه از CoinGecko (OHLC)
-            const days = 365;
-
-            const response = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/ohlc?vs_currency=usd&days=${days}`);
+            const symbol = this.cryptoInfo.symbol;
+            
+            // تبدیل symbol به فرمت والکس (مثلا BTC -> BTCUSDT)
+            let wallexSymbol = `${symbol}USDT`;
+            
+            // دریافت لیست بازارها
+            const response = await fetch('https://api.wallex.ir/v1/markets');
             
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`خطا در دریافت داده‌های OHLC: ${errorData.error || response.statusText}`);
+                throw new Error('Wallex API Error');
             }
-
+            
             const data = await response.json();
             
-            // دریافت داده‌های حجم معاملات به صورت جداگانه (چون /ohlc حجم نداره)
-            const endDate = Math.floor(Date.now() / 1000);
-            const startDate = endDate - (days * 24 * 60 * 60); // دقیقا 365 روز
-            
-            const volumeResponse = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/market_chart/range?vs_currency=usd&from=${startDate}&to=${endDate}`);
-            
-            if (!volumeResponse.ok) {
-                const errorData = await volumeResponse.json();
-                throw new Error(`خطا در دریافت داده‌های حجم: ${errorData.error || 'خطای ناشناخته'}`);
+            if (!data.success || !data.result || !data.result.symbols) {
+                throw new Error('Invalid Wallex response');
             }
             
-            const volumeData = await volumeResponse.json();
-            const volumesMap = new Map(volumeData.total_volumes.map(v => {
-                // تاریخ را به فرمت YYYY-MM-DD تبدیل می‌کنیم تا با خروجی /ohlc یکی باشد
-                const dateKey = new Date(v[0]).toISOString().split('T')[0];
-                return [dateKey, v[1]];
-            }));
-
-            // تبدیل داده‌ها به فرمت مورد نیاز
-            const ohlcData = data.map(item => {
-                const timestamp = item[0];
-                const date = new Date(timestamp);
-                const dateString = date.toISOString().split('T')[0];
-                
-                return {
-                    date: dateString,
-                    open: item[1],
-                    high: item[2],
-                    low: item[3],
-                    close: item[4],
-                    volume: volumesMap.get(dateString) || 0 // مپ کردن حجم بر اساس تاریخ
-                };
-            });
+            const marketData = data.result.symbols[wallexSymbol];
             
-            // فیلتر کردن روزهایی که حجم صفر دارن (معمولا روز جاری که کامل نشده)
-            const filteredData = ohlcData.filter(d => d.volume > 0);
-            
-            if (filteredData.length < 200) {
-                console.warn(`داده‌های کافی برای SMA200 دریافت نشد (تعداد: ${filteredData.length}). ممکن است این شاخص دقیق نباشد.`);
+            if (!marketData) {
+                throw new Error(`Market ${wallexSymbol} not found in Wallex`);
             }
             
-            return filteredData;
-
+            const stats = marketData.stats;
+            
+            return {
+                price: parseFloat(stats.lastPrice),
+                priceChange24h: parseFloat(stats['24h_ch']),
+                volume24h: parseFloat(stats['24h_volume']),
+                high24h: parseFloat(stats['24h_highPrice']),
+                low24h: parseFloat(stats['24h_lowPrice']),
+                bidPrice: parseFloat(stats.bidPrice),
+                askPrice: parseFloat(stats.askPrice),
+                bidVolume: parseFloat(stats.bidVolume),
+                askVolume: parseFloat(stats.askVolume),
+                marketCap: null,
+                lastUpdated: Date.now(),
+                source: 'Wallex'
+            };
         } catch (error) {
-            console.error('Error fetching historical OHLC data:', error);
-            // پرتاب خطا برای مدیریت در سطح بالاتر
-            throw new Error(this.currentLanguage === 'fa' ? 
-                `خطا در دریافت داده‌های تاریخی: ${error.message}` : 
-                `Error fetching historical data: ${error.message}`);
+            console.error('Error fetching from Wallex:', error);
+            throw error;
         }
+    }
+
+    // دریافت دفترچه سفارشات از والکس
+    async fetchOrderBookFromWallex() {
+        try {
+            const symbol = `${this.cryptoInfo.symbol}USDT`;
+            const response = await fetch(`https://api.wallex.ir/v1/depth?symbol=${symbol}`);
+            
+            if (!response.ok) {
+                throw new Error('Wallex Order Book Error');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success || !data.result) {
+                throw new Error('Invalid Wallex Order Book response');
+            }
+            
+            return {
+                bids: data.result.bid.slice(0, 10).map(order => ({
+                    price: parseFloat(order.price),
+                    quantity: parseFloat(order.quantity),
+                    sum: parseFloat(order.sum)
+                })),
+                asks: data.result.ask.slice(0, 10).map(order => ({
+                    price: parseFloat(order.price),
+                    quantity: parseFloat(order.quantity),
+                    sum: parseFloat(order.sum)
+                }))
+            };
+        } catch (error) {
+            console.error('Error fetching Order Book from Wallex:', error);
+            return null;
+        }
+    }
+
+    // تابع جدید برای دریافت داده‌های تاریخی از CoinGecko
+    // 🔄 دریافت داده‌های تاریخی (کندل‌ها) برای تحلیل تکنیکال
+    async fetchHistoricalData() {
+        // تلاش برای دریافت از بایننس (کندل‌های دقیق)
+        try {
+            return await this.fetchHistoricalDataFromBinance();
+        } catch (error) {
+            console.warn('Binance OHLC failed, trying CoinGecko...', error);
+            // تلاش برای کوین‌گکو
+            return await this.fetchHistoricalDataFromCoinGecko();
+        }
+    }
+
+    // تابع جدید: دریافت کندل‌ها از بایننس
+    async fetchHistoricalDataFromBinance() {
+        let symbol = this.cryptoInfo.tradingViewSymbol.replace('BINANCE:', '');
+        if (!symbol.endsWith('USDT')) symbol += 'USDT';
+
+        // دریافت 365 کندل روزانه
+        const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=365`);
+        if (!response.ok) throw new Error('Binance OHLC Error');
+
+        const data = await response.json();
+        
+        // فرمت کردن داده‌ها به ساختار مورد نیاز برنامه
+        return data.map(d => ({
+            date: new Date(d[0]),
+            dateString: new Date(d[0]).toISOString().split('T')[0],
+            open: parseFloat(d[1]),
+            high: parseFloat(d[2]),
+            low: parseFloat(d[3]),
+            close: parseFloat(d[4]),
+            volume: parseFloat(d[5])
+        }));
+    }
+
+    // تابع قدیمی کوین‌گکو (فقط کمی تمیز شده)
+    async fetchHistoricalDataFromCoinGecko() {
+        const days = 365;
+        const response = await fetch(`https://api.coingecko.com/api/v3/coins/${this.cryptoInfo.coingeckoId}/ohlc?vs_currency=usd&days=${days}`);
+        if (!response.ok) throw new Error('CoinGecko OHLC Error');
+
+        const data = await response.json();
+        // مپ کردن داده‌های کوین‌گکو (Time, Open, High, Low, Close) - حجم ندارد در این اندپوینت
+        // برای حجم باید یک درخواست جدا زد که اینجا برای سادگی و سرعت نادیده می‌گیریم یا از بایننس استفاده می‌کنیم
+        // اما چون بایننس اولویت است، این فقط فال‌بک است.
+        return data.map(item => ({
+            date: new Date(item[0]),
+            dateString: new Date(item[0]).toISOString().split('T')[0],
+            open: item[1],
+            high: item[2],
+            low: item[3],
+            close: item[4],
+            volume: 0 // کوین‌گکو در اندپوینت رایگان OHLC حجم نمی‌دهد
+        }));
     }
 
     async calculateTechnicalIndicators() {
@@ -2059,33 +2188,24 @@ class CryptoAnalyzer {
     // تابع جدید برای دریافت اخبار از CoinGecko API
     async fetchCryptoNews() {
         try {
-            const response = await fetch('https://api.coingecko.com/api/v3/search/trending');
-            
-            if (!response.ok) {
-                throw new Error('خطا در دریافت اخبار');
-            }
+            // استفاده از API خبری CryptoCompare
+            const response = await fetch(`https://min-api.cryptocompare.com/data/v2/news/?lang=EN`);
+            if (!response.ok) throw new Error('News API Error');
             
             const data = await response.json();
-            
-            // پردازش درست داده‌ها
-            const news = data.coins.slice(0, 8).map(coin => {
-                const coinData = coin.item;
-                return {
-                    title: `🔥 ${coinData.name} (${coinData.symbol.toUpperCase()}) در ترند`,
-                    source: 'CoinGecko',
-                    date: new Date().toISOString(),
-                    description: `${coinData.name} در رتبه ${coinData.market_cap_rank || 'نامشخص'} ترندهای امروز قرار دارد.`,
-                    link: `https://www.coingecko.com/en/coins/${coinData.id}`,
-                    important: true
-                };
-            });
-            
-            return news;
+            const newsItems = data.Data.slice(0, 8); // 8 خبر اول
 
+            return newsItems.map(item => ({
+                title: item.title,
+                source: item.source,
+                date: new Date(item.published_on * 1000), // تبدیل تایم‌استمپ
+                description: item.body.substring(0, 100) + '...',
+                link: item.url,
+                important: item.categories.includes('BTC') || item.categories.includes('Market') // تشخیص مهم بودن
+            }));
         } catch (error) {
-            console.error('Error fetching news:', error);
-            // برگردوندن اخبار پیش‌فرض در صورت خطا
-            return this.getDefaultNews();
+            console.warn('Error fetching news:', error);
+            return []; // آرایه خالی برمی‌گردانیم، نه خبر فیک
         }
     }
 
@@ -2160,56 +2280,40 @@ class CryptoAnalyzer {
         try {
             const symbol = this.cryptoInfo.symbol;
             console.log('Fetching blockchain data for:', symbol);
-            
-            // برای ارزهای مختلف از APIهای مناسب استفاده می‌کنیم
+
             if (symbol === 'BTC') {
-                const [statsData, marketData] = await Promise.all([
-                    this.fetchBTCStats(),
-                    this.fetchBTCMarketData()
-                ]);
-                
-                this.cryptoData.blockchain = {
-                    stats: statsData,
-                    marketData: marketData,
-                    networkDifficulty: statsData.difficulty || 0,
-                    hashRate: statsData.hash_rate || 0,
-                    transactionCount: statsData.tx_count || 0,
-                    activeAddresses: marketData.addresses_active_count || 0,
-                    transactionVolume: marketData.tx_volume || 0
-                };
-            } 
-            else if (symbol === 'ETH') {
-                // برای اتریوم از Etherscan API استفاده می‌کنیم
-                await this.fetchEthereumData();
+                const stats = await this.fetchBTCStats();
+                // فقط در صورتی که داده واقعی باشد ذخیره می‌کنیم
+                if (stats) {
+                    this.cryptoData.blockchain = {
+                        networkDifficulty: stats.difficulty,
+                        hashRate: stats.hash_rate,
+                        transactionCount: stats.n_tx,
+                        activeAddresses: null, // این API آدرس فعال نمی‌دهد
+                        transactionVolume: stats.total_btc_sent
+                    };
+                }
+            } else if (symbol === 'ETH') {
+                // استفاده از Blockscout یا Etherscan (نسخه دمو)
+                // برای اطمینان، اگر داده‌ای نبود، نال رد می‌کنیم تا UI هندل کند
+                this.cryptoData.blockchain = null; 
+            } else {
+                this.cryptoData.blockchain = null;
             }
-            else {
-                // برای سایر ارزها، API بلاکچین در حال حاضر پشتیبانی نمی‌شود
-                console.warn(`Blockchain data API not supported for ${symbol}. Skipping.`);
-                this.cryptoData.blockchain = {
-                    stats: {},
-                    marketData: {},
-                    networkDifficulty: 0,
-                    hashRate: 0,
-                    transactionCount: 0,
-                    activeAddresses: 0,
-                    transactionVolume: 0
-                };
-            }
-            
-            console.log('Blockchain data processed:', this.cryptoData.blockchain);
-            
         } catch (error) {
-            console.error('Error in fetchBlockchainData:', error);
-            // در صورت بروز خطا، داده خالی برمی‌گردانیم
-            this.cryptoData.blockchain = {
-                stats: {},
-                marketData: {},
-                networkDifficulty: 0,
-                hashRate: 0,
-                transactionCount: 0,
-                activeAddresses: 0,
-                transactionVolume: 0
-            };
+            console.warn('Blockchain data fetch failed:', error);
+            this.cryptoData.blockchain = null; // داده فیک نمی‌دهیم
+        }
+    }
+
+    async fetchBTCStats() {
+        try {
+            const response = await fetch('https://api.blockchain.info/stats');
+            if (!response.ok) throw new Error('BTC Stats Error');
+            return await response.json();
+        } catch (error) {
+            console.warn('Error fetching BTC stats:', error);
+            return null; // برگرداندن نال به جای اعداد ساختگی
         }
     }
 
@@ -3281,33 +3385,83 @@ class CryptoAnalyzer {
 
     // Amirreza is Best ;)
 
-displayResults(analysis) {
+async displayResults(analysis) {
     document.getElementById('analysisStatus').style.display = 'none';
     document.getElementById('analysisResults').style.display = 'block';
 
-    const cryptoData = this.cryptoData;
-    const cryptoInfo = this.cryptoInfo;
-
     // نمایش اطلاعات ارز
-    this.displayCryptoInfo(cryptoInfo, cryptoData);
+    this.displayCryptoInfo();
 
-    // نمایش خلاصه تحلیل
-    this.displaySummary(cryptoInfo, cryptoData);
+    // نمایش مقایسه قیمت صرافی‌ها (والکس و بایننس)
+    const priceComparisonHTML = this.displayPriceComparison();
+    if (priceComparisonHTML) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = priceComparisonHTML;
+        const summaryCard = document.querySelector('.summary-card');
+        if (summaryCard) {
+            summaryCard.insertAdjacentElement('afterend', tempDiv.firstElementChild);
+        }
+    }
+
+    // نمایش دفترچه سفارشات والکس
+    const orderBookHTML = await this.displayOrderBook();
+    if (orderBookHTML) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = orderBookHTML;
+        const priceCompCard = document.querySelector('.price-comparison-card');
+        if (priceCompCard) {
+            priceCompCard.insertAdjacentElement('afterend', tempDiv.firstElementChild);
+        } else {
+            const summaryCard = document.querySelector('.summary-card');
+            if (summaryCard) {
+                summaryCard.insertAdjacentElement('afterend', tempDiv.firstElementChild);
+            }
+        }
+    }
+
+    // نمایش خلاصه
+    const summaryContent = document.getElementById('summaryContent');
+    const currentPrice = this.cryptoData.price || 0;
+    const priceChange = this.cryptoData.priceChange24h || 0;
+    const volume = this.cryptoData.volume24h || 0;
+    const marketCap = this.cryptoData.marketCap || 0;
+
+    summaryContent.innerHTML = `
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-label">${this.currentLanguage === 'fa' ? '💰 قیمت فعلی' : '💰 Current Price'}</span>
+                <span class="summary-value price-large">$${this.formatPrice(currentPrice, this.cryptoInfo.symbol)}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">${this.currentLanguage === 'fa' ? '📊 تغییر 24 ساعته' : '📊 24h Change'}</span>
+                <span class="summary-value ${priceChange >= 0 ? 'positive' : 'negative'}">
+                    ${priceChange >= 0 ? '▲' : '▼'} ${Math.abs(priceChange).toFixed(2)}%
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">${this.currentLanguage === 'fa' ? '📈 حجم معاملات' : '📈 Volume 24h'}</span>
+                <span class="summary-value">$${this.formatLargeNumber(volume)}</span>
+            </div>
+            ${marketCap ? `
+            <div class="summary-item">
+                <span class="summary-label">${this.currentLanguage === 'fa' ? '💎 ارزش بازار' : '💎 Market Cap'}</span>
+                <span class="summary-value">$${this.formatLargeNumber(marketCap)}</span>
+            </div>
+            ` : ''}
+        </div>
+    `;
 
     // نمایش نمودار زنده
-    this.displayLiveChart(cryptoInfo);
+    this.displayLiveChart();
 
-    // نمایش شاخص‌ها
-    this.displayIndicators(cryptoData.technicalIndicators, cryptoData.fearGreedIndex);
+    // نمایش اندیکاتورهای تکنیکال
+    this.displayTechnicalIndicators();
 
     // نمایش سطوح حمایت و مقاومت
-    this.displayLevels();
+    this.displaySupportResistanceLevels();
 
-    // نمایش پروفایل حجم
+    // نمایش Volume Profile
     this.displayVolumeProfile();
-
-    // نمایش سطوح فیبوناچی
-    this.displayFibonacciLevels();
 
     // نمایش داده‌های بلاکچین
     this.displayBlockchainData();
@@ -3315,11 +3469,42 @@ displayResults(analysis) {
     // نمایش متریک‌های پیشرفته
     this.displayAdvancedMetrics();
 
-    // نمایش تحلیل کامل با پشتیبانی از مارک‌داون
-    this.displayAnalysisWithMarkdown(analysis);
+    // نمایش سطوح فیبوناچی
+    this.displayFibonacciLevels();
 
-    // استخراج پیشنهاد معاملاتی از تحلیل
-    this.extractRecommendation(analysis);
+    // نمایش توصیه معاملاتی
+    this.displayTradingRecommendation();
+
+    // نمایش تحلیل کامل AI
+    const fullAnalysisContent = document.getElementById('fullAnalysisContent');
+    
+    // پردازش markdown و نمایش تحلیل
+    let formattedAnalysis = analysis;
+    
+    // اگر marked موجود باشد، از آن استفاده کن
+    if (typeof marked !== 'undefined') {
+        try {
+            formattedAnalysis = marked.parse(analysis);
+        } catch (error) {
+            console.warn('Marked parsing failed, using plain text:', error);
+            formattedAnalysis = this.formatPlainTextAnalysis(analysis);
+        }
+    } else {
+        // اگر marked موجود نیست، فرمت ساده استفاده کن
+        formattedAnalysis = this.formatPlainTextAnalysis(analysis);
+    }
+    
+    fullAnalysisContent.innerHTML = `
+        <div class="analysis-content">
+            ${formattedAnalysis}
+        </div>
+    `;
+
+    // اسکرول به نتایج
+    document.getElementById('resultsPanel').scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+    });
 }
 
 displayCryptoInfo(cryptoInfo, cryptoData) {
@@ -3368,6 +3553,174 @@ displayCryptoInfo(cryptoInfo, cryptoData) {
             <div class="value">$${formattedMarketCap}B</div>
         </div>
     `;
+}
+
+// نمایش مقایسه قیمت بین صرافی‌ها
+displayPriceComparison() {
+    if (!this.cryptoData.wallexPrice && !this.cryptoData.binancePrice) {
+        return '';
+    }
+    
+    const wallexPrice = this.cryptoData.wallexPrice || 0;
+    const binancePrice = this.cryptoData.binancePrice || this.cryptoData.price || 0;
+    
+    let comparisonHTML = `
+        <div class="price-comparison-card">
+            <h3>
+                <i class="fas fa-exchange-alt"></i>
+                ${this.currentLanguage === 'fa' ? '📊 مقایسه قیمت صرافی‌ها' : '📊 Exchange Price Comparison'}
+            </h3>
+            <div class="comparison-grid">
+    `;
+    
+    if (binancePrice > 0) {
+        comparisonHTML += `
+            <div class="exchange-price">
+                <div class="exchange-name">
+                    <img src="icons.png" alt="Binance" class="exchange-icon">
+                    <span>Binance (Global)</span>
+                </div>
+                <div class="price-value">$${this.formatPrice(binancePrice, this.cryptoInfo.symbol)}</div>
+            </div>
+        `;
+    }
+    
+    if (wallexPrice > 0) {
+        comparisonHTML += `
+            <div class="exchange-price wallex-price">
+                <div class="exchange-name">
+                    <img src="icons.png" alt="Wallex" class="exchange-icon">
+                    <span>Wallex (ایران)</span>
+                </div>
+                <div class="price-value">$${this.formatPrice(wallexPrice, this.cryptoInfo.symbol)}</div>
+            </div>
+        `;
+    }
+    
+    // محاسبه اختلاف قیمت (آربیتراژ)
+    if (wallexPrice > 0 && binancePrice > 0) {
+        const priceDiff = wallexPrice - binancePrice;
+        const diffPercent = ((priceDiff / binancePrice) * 100).toFixed(2);
+        const isPositive = priceDiff > 0;
+        
+        comparisonHTML += `
+            <div class="arbitrage-opportunity ${isPositive ? 'positive' : 'negative'}">
+                <div class="arb-title">
+                    <i class="fas fa-chart-line"></i>
+                    ${this.currentLanguage === 'fa' ? 'فرصت آربیتراژ' : 'Arbitrage Opportunity'}
+                </div>
+                <div class="arb-value">
+                    <span class="diff-amount">${isPositive ? '+' : ''}$${this.formatPrice(Math.abs(priceDiff), this.cryptoInfo.symbol)}</span>
+                    <span class="diff-percent ${isPositive ? 'green' : 'red'}">
+                        (${isPositive ? '+' : ''}${diffPercent}%)
+                    </span>
+                </div>
+                <div class="arb-note">
+                    ${this.currentLanguage === 'fa' 
+                        ? (isPositive ? '⬆️ والکس گران‌تر' : '⬇️ والکس ارزان‌تر')
+                        : (isPositive ? '⬆️ Wallex Higher' : '⬇️ Wallex Lower')
+                    }
+                </div>
+            </div>
+        `;
+    }
+    
+    comparisonHTML += `
+            </div>
+        </div>
+    `;
+    
+    return comparisonHTML;
+}
+
+// نمایش دفترچه سفارشات
+async displayOrderBook() {
+    const orderBook = await this.fetchOrderBookFromWallex();
+    
+    if (!orderBook) {
+        return '';
+    }
+    
+    let orderBookHTML = `
+        <div class="orderbook-card">
+            <h3>
+                <i class="fas fa-book"></i>
+                ${this.currentLanguage === 'fa' ? '📖 دفترچه سفارشات (والکس)' : '📖 Order Book (Wallex)'}
+            </h3>
+            <div class="orderbook-container">
+                <div class="orderbook-section asks-section">
+                    <h4 class="section-title sell">
+                        ${this.currentLanguage === 'fa' ? '🔴 فروش (Ask)' : '🔴 Sell (Ask)'}
+                    </h4>
+                    <table class="orderbook-table">
+                        <thead>
+                            <tr>
+                                <th>${this.currentLanguage === 'fa' ? 'قیمت' : 'Price'}</th>
+                                <th>${this.currentLanguage === 'fa' ? 'حجم' : 'Amount'}</th>
+                                <th>${this.currentLanguage === 'fa' ? 'مجموع' : 'Total'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    // نمایش سفارشات فروش (معکوس برای نمایش از بالا به پایین)
+    orderBook.asks.reverse().forEach(ask => {
+        orderBookHTML += `
+            <tr class="ask-row">
+                <td class="price sell-price">${this.formatPrice(ask.price, this.cryptoInfo.symbol)}</td>
+                <td class="quantity">${ask.quantity.toFixed(8)}</td>
+                <td class="sum">${this.formatPrice(ask.sum, this.cryptoInfo.symbol)}</td>
+            </tr>
+        `;
+    });
+    
+    orderBookHTML += `
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="spread-indicator">
+                    <div class="spread-label">${this.currentLanguage === 'fa' ? 'اسپرد' : 'Spread'}</div>
+                    <div class="spread-value">
+                        ${((orderBook.asks[0].price - orderBook.bids[0].price).toFixed(2))}
+                    </div>
+                </div>
+                
+                <div class="orderbook-section bids-section">
+                    <h4 class="section-title buy">
+                        ${this.currentLanguage === 'fa' ? '🟢 خرید (Bid)' : '🟢 Buy (Bid)'}
+                    </h4>
+                    <table class="orderbook-table">
+                        <thead>
+                            <tr>
+                                <th>${this.currentLanguage === 'fa' ? 'قیمت' : 'Price'}</th>
+                                <th>${this.currentLanguage === 'fa' ? 'حجم' : 'Amount'}</th>
+                                <th>${this.currentLanguage === 'fa' ? 'مجموع' : 'Total'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    // نمایش سفارشات خرید
+    orderBook.bids.forEach(bid => {
+        orderBookHTML += `
+            <tr class="bid-row">
+                <td class="price buy-price">${this.formatPrice(bid.price, this.cryptoInfo.symbol)}</td>
+                <td class="quantity">${bid.quantity.toFixed(8)}</td>
+                <td class="sum">${this.formatPrice(bid.sum, this.cryptoInfo.symbol)}</td>
+            </tr>
+        `;
+    });
+    
+    orderBookHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return orderBookHTML;
 }
 
 displaySummary(cryptoInfo, cryptoData) {
